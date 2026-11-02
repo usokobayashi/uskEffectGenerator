@@ -8,6 +8,10 @@ internal interface IHostWindowInput
     void OnPointerEntered();
     void OnPointerExited();
     void OnClicked();
+    void OnPointerDown(int button, int x, int y);
+    void OnPointerMoved(int x, int y);
+    void OnPointerUp(int button, int x, int y);
+    void OnWheel(int delta, int x, int y);
 }
 
 /// <summary>D3D11 スワップチェーンを載せる子ウィンドウ用の最小限の Win32 API。</summary>
@@ -23,7 +27,15 @@ internal static class Win32
     private const uint WM_PAINT = 0x000F;
     private const uint WM_ERASEBKGND = 0x0014;
     private const uint WM_MOUSEMOVE = 0x0200;
+    private const uint WM_LBUTTONDOWN = 0x0201;
     private const uint WM_LBUTTONUP = 0x0202;
+    private const uint WM_MBUTTONDOWN = 0x0207;
+    private const uint WM_MBUTTONUP = 0x0208;
+    private const uint WM_MOUSEWHEEL = 0x020A;
+    private const int VK_SHIFT = 0x10;
+    private const int VK_CONTROL = 0x11;
+    private const int VK_SPACE = 0x20;
+    private const int IDC_SIZEALL = 32646;
     private const uint WM_MOUSELEAVE = 0x02A3;
     private const uint TME_LEAVE = 0x00000002;
     private const int IDC_ARROW = 32512;
@@ -45,6 +57,29 @@ internal static class Win32
     {
         s_inputs.Remove(hwnd);
         s_hovered.Remove(hwnd);
+    }
+
+    public static bool IsSpaceDown() => GetKeyState(VK_SPACE) < 0;
+    public static bool IsShiftDown() => GetKeyState(VK_SHIFT) < 0;
+    public static bool IsControlDown() => GetKeyState(VK_CONTROL) < 0;
+
+    /// <summary>ドラッグの間、窓の外でもマウスを受け取る。</summary>
+    public static void BeginDrag(IntPtr hwnd)
+    {
+        SetCapture(hwnd);
+        SetCursor(LoadCursor(IntPtr.Zero, IDC_SIZEALL));
+    }
+
+    public static void EndDrag()
+    {
+        ReleaseCapture();
+        SetCursor(LoadCursor(IntPtr.Zero, IDC_ARROW));
+    }
+
+    private static (int X, int Y) PointFrom(IntPtr lParam)
+    {
+        long value = lParam.ToInt64();
+        return ((short)(value & 0xFFFF), (short)((value >> 16) & 0xFFFF));
     }
 
     /// <summary>OS のアニメーション効果の設定。取得できないときは有効として扱う。</summary>
@@ -93,16 +128,45 @@ internal static class Win32
                 ValidateRect(hwnd, IntPtr.Zero);
                 return IntPtr.Zero;
             case WM_MOUSEMOVE:
-                if (s_inputs.TryGetValue(hwnd, out var moved) && s_hovered.Add(hwnd))
+                if (s_inputs.TryGetValue(hwnd, out var moved))
                 {
-                    var track = new TRACKMOUSEEVENT
+                    if (s_hovered.Add(hwnd))
                     {
-                        cbSize = (uint)Marshal.SizeOf<TRACKMOUSEEVENT>(),
-                        dwFlags = TME_LEAVE,
-                        hwndTrack = hwnd,
-                    };
-                    TrackMouseEvent(ref track);
-                    moved.OnPointerEntered();
+                        var track = new TRACKMOUSEEVENT
+                        {
+                            cbSize = (uint)Marshal.SizeOf<TRACKMOUSEEVENT>(),
+                            dwFlags = TME_LEAVE,
+                            hwndTrack = hwnd,
+                        };
+                        TrackMouseEvent(ref track);
+                        moved.OnPointerEntered();
+                    }
+                    var (mx, my) = PointFrom(lParam);
+                    moved.OnPointerMoved(mx, my);
+                }
+                return IntPtr.Zero;
+            case WM_LBUTTONDOWN or WM_MBUTTONDOWN:
+                if (s_inputs.TryGetValue(hwnd, out var pressed))
+                {
+                    var (dx, dy) = PointFrom(lParam);
+                    pressed.OnPointerDown(msg == WM_LBUTTONDOWN ? 0 : 1, dx, dy);
+                }
+                return IntPtr.Zero;
+            case WM_MBUTTONUP:
+                if (s_inputs.TryGetValue(hwnd, out var middleUp))
+                {
+                    var (ux, uy) = PointFrom(lParam);
+                    middleUp.OnPointerUp(1, ux, uy);
+                }
+                return IntPtr.Zero;
+            case WM_MOUSEWHEEL:
+                if (s_inputs.TryGetValue(hwnd, out var wheel))
+                {
+                    // ホイールの座標は画面座標で届く
+                    var (sx, sy) = PointFrom(lParam);
+                    var point = new POINT { X = sx, Y = sy };
+                    ScreenToClient(hwnd, ref point);
+                    wheel.OnWheel((short)((wParam.ToInt64() >> 16) & 0xFFFF), point.X, point.Y);
                 }
                 return IntPtr.Zero;
             case WM_MOUSELEAVE:
@@ -111,7 +175,11 @@ internal static class Win32
                 return IntPtr.Zero;
             case WM_LBUTTONUP:
                 if (s_inputs.TryGetValue(hwnd, out var clicked))
+                {
+                    var (lx, ly) = PointFrom(lParam);
+                    clicked.OnPointerUp(0, lx, ly);
                     clicked.OnClicked();
+                }
                 return IntPtr.Zero;
             default:
                 return DefWindowProc(hwnd, msg, wParam, lParam);
@@ -144,8 +212,30 @@ internal static class Win32
         public uint dwHoverTime;
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT
+    {
+        public int X;
+        public int Y;
+    }
+
     [DllImport("user32.dll")]
     private static extern bool TrackMouseEvent(ref TRACKMOUSEEVENT track);
+
+    [DllImport("user32.dll")]
+    private static extern short GetKeyState(int key);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr SetCapture(IntPtr hwnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool ReleaseCapture();
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr SetCursor(IntPtr cursor);
+
+    [DllImport("user32.dll")]
+    private static extern bool ScreenToClient(IntPtr hwnd, ref POINT point);
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool SystemParametersInfo(uint action, uint param, out bool value, uint winIni);

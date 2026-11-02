@@ -18,6 +18,8 @@ public sealed class NumberField : UserControl
         AvaloniaProperty.Register<NumberField, decimal>(nameof(Value));
 
     private readonly TextBox _text;
+    private readonly Button _down;
+    private readonly Button _up;
     private string _formatString = "0";
     private bool _writingText;
 
@@ -35,6 +37,17 @@ public sealed class NumberField : UserControl
         }
     }
 
+    /// <summary>「−」「＋」を出すか。</summary>
+    public bool ShowSteppers
+    {
+        get => _down.IsVisible;
+        set
+        {
+            _down.IsVisible = value;
+            _up.IsVisible = value;
+        }
+    }
+
     /// <summary>値が変わったとき (確定時) に発生する。</summary>
     public event Action? ValueChanged;
 
@@ -47,7 +60,8 @@ public sealed class NumberField : UserControl
         _text.Classes.Add("bare");
         _text.GotFocus += (_, _) => _text.SelectAll();
         _text.LostFocus += (_, _) => Commit();
-        _text.KeyDown += (_, e) =>
+        TextEditDismiss.Attach(_text, EndEditing);
+        _text.AddHandler(KeyDownEvent, (_, e) =>
         {
             if (e.Key == Key.Enter)
             {
@@ -55,17 +69,27 @@ public sealed class NumberField : UserControl
                 _text.SelectAll();
                 e.Handled = true;
             }
-        };
+            else if (e.Key == Key.Escape)
+            {
+                // 入力を取り消して抜ける
+                WriteText();
+                Focus(); // 入力欄からフォーカスを外す
+                e.Handled = true;
+            }
+        }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
 
-        var down = MakeButton("−", "S.Common.Decrease", () => Step(-1));
-        var up = MakeButton("＋", "S.Common.Increase", () => Step(1));
+        _down = MakeButton("−", "S.Common.Decrease", () => Step(-1));
+        _up = MakeButton("＋", "S.Common.Increase", () => Step(1));
 
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
         Grid.SetColumn(_text, 1);
-        Grid.SetColumn(up, 2);
-        grid.Children.Add(down);
+        Grid.SetColumn(_up, 2);
+        grid.Children.Add(_down);
         grid.Children.Add(_text);
-        grid.Children.Add(up);
+        grid.Children.Add(_up);
+
+        Focusable = true;
+        IsTabStop = false;
 
         var frame = new Border { ClipToBounds = true, Child = grid };
         frame.Classes.Add("numberField");
@@ -93,6 +117,12 @@ public sealed class NumberField : UserControl
             WriteText();
             ValueChanged?.Invoke();
         }
+    }
+
+    private void EndEditing()
+    {
+        Commit();
+        Focus(); // 入力欄からフォーカスを外す
     }
 
     private Button MakeButton(string glyph, string nameKey, Action click)

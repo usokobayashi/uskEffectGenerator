@@ -7,6 +7,9 @@ namespace UskEffect.App.Views;
 
 public partial class ViewStrip : UserControl
 {
+    // 表示の切り替えの並び
+    private static readonly PreviewMode[] Modes = [PreviewMode.Rect, PreviewMode.Polar, PreviewMode.SeamCheck, PreviewMode.Effect];
+
     /// <summary>表示か極座標の設定が変わったときに発生する。</summary>
     public event Action? Changed;
 
@@ -24,8 +27,8 @@ public partial class ViewStrip : UserControl
 
     public PreviewMode Mode
     {
-        get => (PreviewMode)Math.Max(0, ViewSegment.SelectedIndex);
-        set => ViewSegment.SelectedIndex = (int)value;
+        get => Modes[Math.Clamp(ViewSegment.SelectedIndex, 0, Modes.Length - 1)];
+        set => ViewSegment.SelectedIndex = Math.Max(Array.IndexOf(Modes, value), 0);
     }
 
     public PolarSettings Polar
@@ -54,7 +57,11 @@ public partial class ViewStrip : UserControl
         set => PolarButton.IsVisible = value;
     }
 
-    public void SetZoom(double? ratio) => ZoomText.Text = ratio is { } r ? $"{r * 100:0}%" : "";
+    public void SetZoom(double? ratio, double rotationDegrees)
+    {
+        string zoom = ratio is { } r ? $"{r * 100:0}%" : "";
+        ZoomText.Text = ratio is not null && Math.Abs(rotationDegrees) >= 0.5 ? $"{zoom} {rotationDegrees:0}°" : zoom;
+    }
 
     private void OnPolarChanged()
     {

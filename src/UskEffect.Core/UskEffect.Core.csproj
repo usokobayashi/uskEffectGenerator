@@ -1,6 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <!-- 画像の読み込みに使う WIC は Vortice.Direct2D1 に含まれる -->
+    <PackageReference Include="Vortice.Direct2D1" Version="3.8.3" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\UskEffect.Graphics\UskEffect.Graphics.csproj" />
   </ItemGroup>
 

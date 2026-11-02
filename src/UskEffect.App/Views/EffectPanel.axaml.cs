@@ -24,16 +24,17 @@ public partial class EffectPanel : UserControl
             toggle.IsCheckedChanged += (_, _) => RaiseChanged();
         foreach (RangeBase field in new RangeBase[]
                  {
-                     ScrollUField, ScrollVField, RotationStartField, RotationEndField, ScaleStartField, ScaleEndField,
+                     RotationStartField, RotationEndField, ScaleStartField, ScaleEndField,
                      AlphaStartField, AlphaEndField, DissolveStartField, DissolveEndField, EdgeWidthField,
                  })
             field.ValueChanged += (_, _) => RaiseChanged();
+        ScrollRow.Changed += RaiseChanged;
         foreach (ColorSwatch swatch in new[] { ColorStartSwatch, ColorEndSwatch, EdgeColorSwatch })
             swatch.ColorChanged += RaiseChanged;
     }
 
-    public float ScrollU => (float)ScrollUField.Value;
-    public float ScrollV => (float)ScrollVField.Value;
+    public float ScrollU => ScrollRow.Read().X;
+    public float ScrollV => ScrollRow.Read().Y;
 
     public EffectSettings Read() => new()
     {
@@ -61,12 +62,11 @@ public partial class EffectPanel : UserControl
             BackgroundSegment.SelectedIndex = (int)e.Background;
             SoftMaskSwitch.IsChecked = e.Mask == EffectMask.SoftCircle;
             TextureAlphaSwitch.IsChecked = e.TextureAsAlpha;
-            ScrollUField.Value = scrollU;
-            ScrollVField.Value = scrollV;
+            ScrollRow.Write(scrollU, scrollV);
             RotationStartField.Value = e.Rotation.Start;
             RotationEndField.Value = e.Rotation.End;
-            ScaleStartField.Value = e.Scale.Start;
-            ScaleEndField.Value = e.Scale.End;
+            ScaleStartField.SetValueExpanding(e.Scale.Start);
+            ScaleEndField.SetValueExpanding(e.Scale.End);
             AlphaStartField.Value = e.Alpha.Start;
             AlphaEndField.Value = e.Alpha.End;
             DissolveStartField.Value = e.Dissolve.Start;

@@ -3,6 +3,7 @@ using Avalonia.Platform.Storage;
 using UskEffect.App.Controls;
 using UskEffect.App.Locale;
 using UskEffect.Core.Export;
+using UskEffect.Core.Imaging;
 using UskEffect.Core.Project;
 using UskEffect.Graphics;
 
@@ -16,6 +17,8 @@ public partial class MainWindow
     private static FilePickerFileType TgaFileType => new(Loc.T("S.FileType.Tga")) { Patterns = ["*.tga"] };
 
     private string? _projectPath;
+    private ImageData? _image;
+    private string? _imageName;
     private bool _dirty;
     private bool _closeConfirmed;
     private bool _closePromptOpen;
@@ -30,6 +33,8 @@ public partial class MainWindow
         Top.SaveMenuItem.Click += async (_, _) => await SaveProjectAsync(saveAs: false);
         Top.SaveButton.Click += async (_, _) => await SaveProjectAsync(saveAs: false);
         Top.SaveAsMenuItem.Click += async (_, _) => await SaveProjectAsync(saveAs: true);
+        Top.LoadImageMenuItem.Click += async (_, _) => await LoadImageAsync();
+        NoiseTab.LoadImageButton.Click += async (_, _) => await LoadImageAsync();
         Top.ExportMenuItem.Click += async (_, _) => await ExportImageAsync();
         Top.ExportRunButton.Click += async (_, _) =>
         {
@@ -105,6 +110,49 @@ public partial class MainWindow
             UnsavedChoice.Discard => true,
             _ => false,
         };
+    }
+
+    private static FilePickerFileType ImageFileType =>
+        new(Loc.T("S.FileType.Images")) { Patterns = ImageLoader.Extensions.Select(e => "*" + e).ToArray() };
+
+    private async Task LoadImageAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = Loc.T("S.Source.LoadTitle"),
+            AllowMultiple = false,
+            FileTypeFilter = [ImageFileType],
+        });
+        string? path = files.Count > 0 ? files[0].TryGetLocalPath() : null;
+        if (path is null)
+            return;
+
+        try
+        {
+            // 大きな画像でも画面を止めない
+            var image = await Task.Run(() => ImageLoader.Load(path));
+            SetImage(image, Path.GetFileName(path));
+            NoiseTab.UseImage = true;
+            MarkDirty();
+        }
+        catch (ImageLoadException ex)
+        {
+            await Dialogs.ShowMessageAsync(this, Loc.T("S.Source.LoadFailed"), $"{path}{Environment.NewLine}{Environment.NewLine}{ex.Message}");
+        }
+    }
+
+    private void SetImage(ImageData? image, string? name)
+    {
+        _image = image;
+        _imageName = name;
+        NoiseTab.SetImageInfo(image is null ? null : Loc.F("S.Source.Info", name, image.Width, image.Height));
+    }
+
+    // 元画像の切り替えをエンジンへ伝える
+    private void ApplySource()
+    {
+        _engine?.SetImageSource(NoiseTab.UseImage ? _image : null);
+        MarkDirty();
     }
 
     private async Task NewProjectAsync()
@@ -216,8 +264,15 @@ public partial class MainWindow
             if (!TextureExporter.IsSupported(format, channels))
                 throw new NotSupportedException(Loc.T("S.Export.Gray16PngOnly"));
 
-            var (pixels, width, height) = _engine.ReadNoisePixels();
-            TextureExporter.Save(path, pixels, width, height, channels);
+            if (NoiseTab.UseImage && _image is { } image)
+            {
+                TextureExporter.SaveImage(path, image, channels);
+            }
+            else
+            {
+                var (pixels, width, height) = _engine.ReadNoisePixels();
+                TextureExporter.Save(path, pixels, width, height, channels);
+            }
             Status.ShowMessage(Loc.F("S.Export.Done", path));
         }
         catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException or IOException or UnauthorizedAccessException)
@@ -233,6 +288,8 @@ public partial class MainWindow
         Effect = EffectTab.Read(),
         Timeline = Timeline.Read(),
         Export = new ExportSettings { Channels = (ExportChannels)Math.Max(0, Top.ExportChannelsBox.SelectedIndex) },
+        Source = new SourceSettings { Kind = NoiseTab.UseImage ? SourceKind.Image : SourceKind.Noise, ImageName = _imageName },
+        Image = _image,
     };
 
     internal void ApplyDocument(ProjectDocument document)
@@ -240,8 +297,14 @@ public partial class MainWindow
         _suppressApply = true;
         try
         {
-            NoiseTab.Write(document.Noise, includeResolution: true);
-            Strip.Mode = document.Preview.Mode;
+            NoiseTab.Write(document.Noise);
+            // 古いプロジェクトの 3×3 表示は Tiling 3×3 の矩形にする
+            bool oldTile = document.Preview.Mode == PreviewMode.Tile3x3;
+            Strip.Mode = oldTile ? PreviewMode.Rect : document.Preview.Mode;
+            NoiseTab.WriteTexture(oldTile ? 3 : document.Preview.TilingX, oldTile ? 3 : document.Preview.TilingY,
+                document.Preview.OffsetX, document.Preview.OffsetY);
+            SetImage(document.Image, document.Source.ImageName);
+            NoiseTab.UseImage = document.Source.Kind == SourceKind.Image && document.Image is not null;
             Strip.Polar = document.Preview.Polar;
             SeamTab.Heatmap = document.Preview.Heatmap;
             SeamTab.Threshold = document.Preview.HeatThreshold;
@@ -255,6 +318,9 @@ public partial class MainWindow
         }
 
         _engine?.Timeline.Stop();
+        if (_engine is not null)
+            _engine.View = new CanvasView();
+        ApplySource();
         ApplySettings();
     }
 }

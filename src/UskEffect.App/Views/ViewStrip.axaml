@@ -7,7 +7,6 @@
     <DockPanel>
       <ui:SegmentedControl x:Name="ViewSegment" DockPanel.Dock="Left" VerticalAlignment="Center" SelectedIndex="0">
         <ListBoxItem Content="{DynamicResource S.View.Rect}" />
-        <ListBoxItem Content="{DynamicResource S.View.Tile}" />
         <ListBoxItem Content="{DynamicResource S.View.Polar}" />
         <ListBoxItem Content="{DynamicResource S.View.Seam}" />
         <ListBoxItem Content="{DynamicResource S.View.Effect}" />

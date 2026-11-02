@@ -11,6 +11,10 @@
   <x:String x:Key="S.Menu.Save">保存(_S)</x:String>
   <x:String x:Key="S.Menu.SaveAs">名前を付けて保存(_A)...</x:String>
   <x:String x:Key="S.Menu.Export">画像を書き出し(_E)...</x:String>
+  <x:String x:Key="S.Menu.LoadImage">画像を読み込み(_I)...</x:String>
+  <x:String x:Key="S.Menu.ZoomFit">全体を表示(_F)</x:String>
+  <x:String x:Key="S.Menu.Zoom100">100% で表示(_1)</x:String>
+  <x:String x:Key="S.Menu.ResetRotation">回転を戻す(_R)</x:String>
   <x:String x:Key="S.Menu.Exit">終了(_X)</x:String>
   <x:String x:Key="S.Menu.Edit">編集(_E)</x:String>
   <x:String x:Key="S.Menu.Undo">元に戻す(_U)</x:String>
@@ -36,6 +40,7 @@
   <x:String x:Key="S.Export.Gray16">グレースケール 16bit（PNG のみ）</x:String>
   <x:String x:Key="S.Export.RgbaOpaque">RGBA（RGB = 値、A = 255）</x:String>
   <x:String x:Key="S.Export.RgbaWhiteAlpha">RGBA（RGB = 白、A = 値）</x:String>
+  <x:String x:Key="S.Export.RgbaSource">RGBA（読み込んだ画像のまま）</x:String>
   <x:String x:Key="S.Export.Run">書き出し...</x:String>
   <x:String x:Key="S.Export.Title">画像を書き出し</x:String>
   <x:String x:Key="S.Export.Done">書き出しました: {0}</x:String>
@@ -72,7 +77,6 @@
 
   <!-- 表示 -->
   <x:String x:Key="S.View.Rect">矩形</x:String>
-  <x:String x:Key="S.View.Tile">3×3</x:String>
   <x:String x:Key="S.View.Polar">極座標</x:String>
   <x:String x:Key="S.View.Seam">シーム</x:String>
   <x:String x:Key="S.View.Effect">エフェクト</x:String>
@@ -89,22 +93,38 @@
   <x:String x:Key="S.Tab.Effect">エフェクト</x:String>
   <x:String x:Key="S.Tab.Layer">レイヤー</x:String>
 
+  <!-- 元画像 -->
+  <x:String x:Key="S.Source.Label">元画像</x:String>
+  <x:String x:Key="S.Source.Noise">ノイズ</x:String>
+  <x:String x:Key="S.Source.Image">画像</x:String>
+  <x:String x:Key="S.Source.Load">読み込み...</x:String>
+  <x:String x:Key="S.Source.None">画像は読み込まれていません</x:String>
+  <x:String x:Key="S.Source.Info">{0}（{1}×{2}）</x:String>
+  <x:String x:Key="S.Source.LoadTitle">画像を読み込み</x:String>
+  <x:String x:Key="S.Source.LoadFailed">画像を読み込めません</x:String>
+  <x:String x:Key="S.FileType.Images">画像（PNG・TGA・JPG・BMP）</x:String>
+
+  <!-- テクスチャ -->
+  <x:String x:Key="S.Texture.Header">テクスチャ</x:String>
+  <x:String x:Key="S.Texture.Tiling">Tiling</x:String>
+  <x:String x:Key="S.Texture.Offset">Offset</x:String>
+  <x:String x:Key="S.Texture.X">X</x:String>
+  <x:String x:Key="S.Texture.Y">Y</x:String>
+  <x:String x:Key="S.Texture.Link">X と Y を同じ値にする</x:String>
+
   <!-- ノイズ -->
-  <x:String x:Key="S.Noise.Preset">プリセット</x:String>
-  <x:String x:Key="S.Noise.PresetPlaceholder">自分で調整した値</x:String>
-  <x:String x:Key="S.Noise.PresetBuiltIn">{0}（標準）</x:String>
-  <x:String x:Key="S.Noise.PresetSave">保存</x:String>
-  <x:String x:Key="S.Noise.PresetDelete">削除</x:String>
-  <x:String x:Key="S.Noise.PresetName">保存する名前</x:String>
-  <x:String x:Key="S.Noise.PresetSaved">「{0}」を保存しました。</x:String>
-  <x:String x:Key="S.Noise.PresetDeleted">「{0}」を削除しました。</x:String>
-  <x:String x:Key="S.Noise.PresetSaveFailed">保存できません: {0}</x:String>
-  <x:String x:Key="S.Noise.PresetDeleteFailed">削除できません: {0}</x:String>
   <x:String x:Key="S.Noise.Type">種類</x:String>
   <x:String x:Key="S.Noise.Fractal">合成</x:String>
   <x:String x:Key="S.Noise.Worley">Worley</x:String>
+  <x:String x:Key="S.Noise.StripeDirection">帯の向き</x:String>
+  <x:String x:Key="S.Noise.StripeVertical">縦</x:String>
+  <x:String x:Key="S.Noise.StripeHorizontal">横</x:String>
+  <x:String x:Key="S.Noise.StripeDiagonal">斜め</x:String>
+  <x:String x:Key="S.Noise.StripeWidth">帯の幅</x:String>
+  <x:String x:Key="S.Noise.StripeSoftness">帯のぼかし</x:String>
   <x:String x:Key="S.Noise.Seamless">シームレス</x:String>
   <x:String x:Key="S.Noise.Seed">Seed</x:String>
+  <x:String x:Key="S.Noise.SeedRandom">ランダムな値にする</x:String>
   <x:String x:Key="S.Noise.Resolution">解像度</x:String>
   <x:String x:Key="S.Noise.Shape">形状</x:String>
   <x:String x:Key="S.Noise.Tone">階調</x:String>
@@ -132,7 +152,7 @@
   <x:String x:Key="S.Seam.Fix">シーム修正</x:String>
   <x:String x:Key="S.Seam.FixOffset">オフセット表示</x:String>
   <x:String x:Key="S.Seam.FixBlend">自動ブレンド</x:String>
-  <x:String x:Key="S.Seam.FixNote">既存画像の読み込みと一緒に使えるようになります。</x:String>
+  <x:String x:Key="S.Seam.FixNote">今後の更新で使えるようになります。</x:String>
 
   <!-- エフェクト -->
   <x:String x:Key="S.Effect.Blend">合成</x:String>
@@ -146,8 +166,9 @@
   <x:String x:Key="S.Effect.SoftMask">円形ソフトマスク（矩形のみ）</x:String>
   <x:String x:Key="S.Effect.TextureAsAlpha">テクスチャの値をアルファに使う</x:String>
   <x:String x:Key="S.Effect.Motion">動き</x:String>
-  <x:String x:Key="S.Effect.ScrollU">UV 移動 U</x:String>
-  <x:String x:Key="S.Effect.ScrollV">UV 移動 V</x:String>
+  <x:String x:Key="S.Effect.Scroll">UV 移動 /s</x:String>
+  <x:String x:Key="S.Effect.ScrollX">U</x:String>
+  <x:String x:Key="S.Effect.ScrollY">V</x:String>
   <x:String x:Key="S.Effect.Rotation">回転</x:String>
   <x:String x:Key="S.Effect.Scale">拡縮</x:String>
   <x:String x:Key="S.Effect.Look">見た目</x:String>
@@ -158,6 +179,8 @@
   <x:String x:Key="S.Effect.EdgeColor">発光色</x:String>
   <x:String x:Key="S.Effect.Start">開始</x:String>
   <x:String x:Key="S.Effect.End">終了</x:String>
+
+  <x:String x:Key="S.Color.Hex">色の 16 進値</x:String>
 
   <!-- レイヤー -->
   <x:String x:Key="S.Layer.Noise">ノイズ（生成）</x:String>

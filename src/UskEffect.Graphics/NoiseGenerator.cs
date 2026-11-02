@@ -61,6 +61,9 @@ public sealed unsafe class NoiseGenerator : IDisposable
             Contrast = settings.Contrast,
             Brightness = settings.Brightness,
             Invert = settings.Invert ? 1u : 0u,
+            StripeDirection = (uint)settings.StripeDirection,
+            StripeWidth = settings.StripeWidth,
+            StripeSoftness = settings.StripeSoftness,
         };
 
         var context = _gpu.Context;

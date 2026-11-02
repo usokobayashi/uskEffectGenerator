@@ -20,9 +20,33 @@ public sealed class D3DHost : NativeControlHost, IHostWindowInput
     public event Action? HostPointerEntered;
     public event Action? HostPointerExited;
 
+    /// <summary>引数は (ボタン: 0 左 / 1 中, x, y)。座標は HWND の画素。</summary>
+    public event Action<int, int, int>? HostPointerDown;
+    public event Action<int, int>? HostPointerMoved;
+    public event Action<int, int, int>? HostPointerUp;
+
+    /// <summary>引数は (回転量: 1 ノッチ 120, x, y)。</summary>
+    public event Action<int, int, int>? HostWheel;
+
+    public bool IsPointerOverHost { get; private set; }
+
+    void IHostWindowInput.OnPointerDown(int button, int x, int y) => HostPointerDown?.Invoke(button, x, y);
+    void IHostWindowInput.OnPointerMoved(int x, int y) => HostPointerMoved?.Invoke(x, y);
+    void IHostWindowInput.OnPointerUp(int button, int x, int y) => HostPointerUp?.Invoke(button, x, y);
+    void IHostWindowInput.OnWheel(int delta, int x, int y) => HostWheel?.Invoke(delta, x, y);
+
     void IHostWindowInput.OnClicked() => HostClicked?.Invoke();
-    void IHostWindowInput.OnPointerEntered() => HostPointerEntered?.Invoke();
-    void IHostWindowInput.OnPointerExited() => HostPointerExited?.Invoke();
+    void IHostWindowInput.OnPointerEntered()
+    {
+        IsPointerOverHost = true;
+        HostPointerEntered?.Invoke();
+    }
+
+    void IHostWindowInput.OnPointerExited()
+    {
+        IsPointerOverHost = false;
+        HostPointerExited?.Invoke();
+    }
 
     public (int Width, int Height) PixelSize => Hwnd == IntPtr.Zero ? (0, 0) : Win32.GetClientSize(Hwnd);
 

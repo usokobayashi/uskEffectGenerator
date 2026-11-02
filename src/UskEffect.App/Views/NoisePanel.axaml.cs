@@ -1,7 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using UskEffect.App.Locale;
-using UskEffect.App.Presets;
 using UskEffect.Graphics;
 
 namespace UskEffect.App.Views;
@@ -10,33 +9,80 @@ public partial class NoisePanel : UserControl
 {
     private static readonly int[] Resolutions = [256, 512, 1024, 2048];
 
-    private readonly NoisePresetStore _presets = new();
     private bool _suppress;
 
     /// <summary>ノイズの設定が変わったときに発生する。</summary>
     public event Action? Changed;
 
+    /// <summary>元画像の切り替え (ノイズ／画像) が変わったときに発生する。</summary>
+    public event Action? SourceChanged;
+
+    /// <summary>Tiling / Offset が変わったときに発生する。</summary>
+    public event Action? TextureChanged;
+
     public NoisePanel()
     {
         InitializeComponent();
 
-        foreach (RangeBase field in new RangeBase[] { FrequencyField, OctavesField, PersistenceField, LacunarityField, WarpField, ContrastField, BrightnessField })
+        foreach (RangeBase field in new RangeBase[]
+                 {
+                     FrequencyField, OctavesField, PersistenceField, LacunarityField, WarpField, ContrastField, BrightnessField,
+                     StripeWidthField, StripeSoftnessField,
+                 })
             field.ValueChanged += (_, _) => RaiseChanged();
-        foreach (SelectingItemsControl selector in new SelectingItemsControl[] { TypeSegment, FractalSegment, WorleySegment, SeamSegment, ResolutionBox })
+        foreach (SelectingItemsControl selector in new SelectingItemsControl[]
+                 {
+                     TypeBox, FractalSegment, WorleySegment, SeamSegment, ResolutionBox, StripeDirectionSegment,
+                 })
             selector.SelectionChanged += (_, _) => RaiseChanged();
         SeedField.ValueChanged += RaiseChanged;
+        RandomSeedButton.Click += (_, _) => SeedField.Value = Random.Shared.Next(0, (int)SeedField.Maximum + 1);
+        SourceSegment.SelectionChanged += (_, _) =>
+        {
+            NoiseControls.IsEnabled = !UseImage;
+            if (!_suppress)
+                SourceChanged?.Invoke();
+        };
+        TilingRow.Changed += RaiseTextureChanged;
+        OffsetRow.Changed += RaiseTextureChanged;
+        SetImageInfo(null);
         InvertSwitch.IsCheckedChanged += (_, _) => RaiseChanged();
-
-        PresetBox.SelectionChanged += (_, _) => OnPresetSelected();
-        SavePresetButton.Click += (_, _) => SavePreset();
-        DeletePresetButton.Click += (_, _) => DeletePreset();
-        RefreshPresetList(null);
         UpdateEnabled();
+    }
+
+    /// <summary>読み込んだ画像を表示するか。</summary>
+    public bool UseImage
+    {
+        get => SourceSegment.SelectedIndex == 1;
+        set => SourceSegment.SelectedIndex = value ? 1 : 0;
+    }
+
+    /// <summary>画像の情報を出す。null なら画像なし。</summary>
+    public void SetImageInfo(string? info)
+    {
+        ImageInfoText.Text = info ?? Loc.T("S.Source.None");
+        ToolTip.SetTip(ImageInfoText, info);
+        SourceImageItem.IsEnabled = info is not null;
+        if (info is null)
+            UseImage = false;
+    }
+
+    public (float TilingX, float TilingY, float OffsetX, float OffsetY) ReadTexture()
+    {
+        var (tilingX, tilingY) = TilingRow.Read();
+        var (offsetX, offsetY) = OffsetRow.Read();
+        return (tilingX, tilingY, offsetX, offsetY);
+    }
+
+    public void WriteTexture(float tilingX, float tilingY, float offsetX, float offsetY)
+    {
+        TilingRow.Write(tilingX, tilingY);
+        OffsetRow.Write(offsetX, offsetY);
     }
 
     public NoiseSettings Read() => new()
     {
-        Type = (NoiseType)Math.Max(0, TypeSegment.SelectedIndex),
+        Type = (NoiseType)Math.Max(0, TypeBox.SelectedIndex),
         Resolution = Resolutions[Math.Clamp(ResolutionBox.SelectedIndex, 0, Resolutions.Length - 1)],
         Seed = (uint)SeedField.Value,
         Frequency = (int)FrequencyField.Value,
@@ -46,37 +92,38 @@ public partial class NoisePanel : UserControl
         Lacunarity = (int)LacunarityField.Value,
         Fractal = (FractalMode)Math.Max(0, FractalSegment.SelectedIndex),
         Worley = (WorleyMode)Math.Max(0, WorleySegment.SelectedIndex),
+        StripeDirection = (StripeDirection)Math.Max(0, StripeDirectionSegment.SelectedIndex),
+        StripeWidth = (float)StripeWidthField.Value,
+        StripeSoftness = (float)StripeSoftnessField.Value,
         WarpStrength = (float)WarpField.Value,
         Contrast = (float)ContrastField.Value,
         Brightness = (float)BrightnessField.Value,
         Invert = InvertSwitch.IsChecked == true,
     };
 
-    /// <summary>設定を反映する。解像度は出力設定なので、プリセットでは変えない (includeResolution = false)。</summary>
-    public void Write(NoiseSettings s, bool includeResolution)
+    public void Write(NoiseSettings s)
     {
         _suppress = true;
         try
         {
-            TypeSegment.SelectedIndex = (int)s.Type;
+            TypeBox.SelectedIndex = (int)s.Type;
             SeedField.Value = s.Seed;
-            FrequencyField.Value = s.Frequency;
+            FrequencyField.SetValueExpanding(s.Frequency);
             OctavesField.Value = s.Octaves;
             PersistenceField.Value = s.Persistence;
             SeamSegment.SelectedIndex = (int)s.Seam;
             LacunarityField.Value = s.Lacunarity;
             FractalSegment.SelectedIndex = (int)s.Fractal;
             WorleySegment.SelectedIndex = (int)s.Worley;
-            WarpField.Value = s.WarpStrength;
-            ContrastField.Value = s.Contrast;
+            StripeDirectionSegment.SelectedIndex = (int)s.StripeDirection;
+            StripeWidthField.Value = s.StripeWidth;
+            StripeSoftnessField.Value = s.StripeSoftness;
+            WarpField.SetValueExpanding(s.WarpStrength);
+            ContrastField.SetValueExpanding(s.Contrast);
             BrightnessField.Value = s.Brightness;
             InvertSwitch.IsChecked = s.Invert;
-            if (includeResolution)
-            {
-                int index = Array.IndexOf(Resolutions, s.Resolution);
-                ResolutionBox.SelectedIndex = index >= 0 ? index : Array.IndexOf(Resolutions, 512);
-                PresetBox.SelectedIndex = -1;
-            }
+            int index = Array.IndexOf(Resolutions, s.Resolution);
+            ResolutionBox.SelectedIndex = index >= 0 ? index : Array.IndexOf(Resolutions, 512);
         }
         finally
         {
@@ -93,73 +140,15 @@ public partial class NoisePanel : UserControl
         Changed?.Invoke();
     }
 
-    private void UpdateEnabled() => WorleySegment.IsEnabled = TypeSegment.SelectedIndex == (int)NoiseType.Worley;
-
-    private void RefreshPresetList(string? selectName)
+    private void RaiseTextureChanged()
     {
-        var presets = _presets.All;
-        _suppress = true;
-        try
-        {
-            PresetBox.ItemsSource = presets.Select(p => p.DisplayName).ToList();
-            PresetBox.SelectedIndex = selectName is null ? -1 : presets.ToList().FindIndex(p => p.Name == selectName);
-        }
-        finally
-        {
-            _suppress = false;
-        }
-        UpdatePresetButtons();
+        if (!_suppress)
+            TextureChanged?.Invoke();
     }
 
-    private NoisePreset? SelectedPreset =>
-        PresetBox.SelectedIndex is int i && i >= 0 && i < _presets.All.Count ? _presets.All[i] : null;
-
-    private void OnPresetSelected()
+    private void UpdateEnabled()
     {
-        UpdatePresetButtons();
-        if (_suppress || SelectedPreset is not { } preset)
-            return;
-        PresetNameBox.Text = preset.IsBuiltIn ? "" : preset.Name;
-        Write(preset.Settings, includeResolution: false);
-    }
-
-    private void UpdatePresetButtons() => DeletePresetButton.IsEnabled = SelectedPreset is { IsBuiltIn: false };
-
-    private void ShowPresetMessage(string message)
-    {
-        PresetMessage.Text = message;
-        PresetMessage.IsVisible = true;
-    }
-
-    private void SavePreset()
-    {
-        string name = (PresetNameBox.Text ?? "").Trim();
-        try
-        {
-            _presets.Save(name, Read());
-            RefreshPresetList(name);
-            ShowPresetMessage(Loc.F("S.Noise.PresetSaved", name));
-        }
-        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
-        {
-            ShowPresetMessage(Loc.F("S.Noise.PresetSaveFailed", ex.Message));
-        }
-    }
-
-    private void DeletePreset()
-    {
-        if (SelectedPreset is not { IsBuiltIn: false } preset)
-            return;
-        try
-        {
-            _presets.Delete(preset.Name);
-            RefreshPresetList(null);
-            PresetNameBox.Text = "";
-            ShowPresetMessage(Loc.F("S.Noise.PresetDeleted", preset.Name));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            ShowPresetMessage(Loc.F("S.Noise.PresetDeleteFailed", ex.Message));
-        }
+        WorleySegment.IsEnabled = TypeBox.SelectedIndex == (int)NoiseType.Worley;
+        StripeControls.IsEnabled = TypeBox.SelectedIndex == (int)NoiseType.Stripe;
     }
 }

@@ -15,17 +15,10 @@
 
       <views:ToolRail DockPanel.Dock="Left" />
 
-      <!-- 右: プレビューと設定のタブ -->
+      <!-- 右: 設定のタブ -->
       <Border x:Name="RightPanel" DockPanel.Dock="Right" Width="{StaticResource Ue.Size.RightPanel}" Background="{StaticResource Ue.Panel}"
               BorderBrush="{StaticResource Ue.Line}" BorderThickness="{StaticResource Ue.Line.Left}">
         <DockPanel>
-          <Border DockPanel.Dock="Top" Padding="{StaticResource Ue.Pad.Previews}" BorderBrush="{StaticResource Ue.Line}" BorderThickness="{StaticResource Ue.Line.Bottom}">
-            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="{StaticResource Ue.Gap.Line}">
-              <ui:PreviewThumb x:Name="TileThumb" Text="{DynamicResource S.View.Tile}" />
-              <ui:PreviewThumb x:Name="PolarThumb" Grid.Column="1" Text="{DynamicResource S.View.Polar}" />
-              <ui:PreviewThumb x:Name="EffectThumb" Grid.Column="2" Text="{DynamicResource S.View.Effect}" />
-            </Grid>
-          </Border>
           <Border DockPanel.Dock="Top" Padding="{StaticResource Ue.Pad.Tabs}">
             <ui:SegmentedControl x:Name="TabSegment" SelectedIndex="0">
               <ListBoxItem Content="{DynamicResource S.Tab.Noise}" Padding="2,0" />

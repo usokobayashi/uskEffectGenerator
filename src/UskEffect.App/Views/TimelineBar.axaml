@@ -12,7 +12,7 @@
               ToolTip.Tip="{DynamicResource S.Timeline.Stop}" AutomationProperties.Name="{DynamicResource S.Timeline.Stop}">
         <Path Classes="stroke icon" Data="{StaticResource Icon.Stop}" />
       </Button>
-      <ui:SliderField x:Name="ScrubField" Grid.Column="2" Height="{StaticResource Ue.Size.Scrub}" Background="{StaticResource Ue.Ground}"
+      <ui:SliderField x:Name="ScrubField" Grid.Column="2" Classes="compact" IsEditable="False" Height="{StaticResource Ue.Size.Scrub}" Background="{StaticResource Ue.Ground}"
                       Minimum="0" Maximum="1" Step="0.001" ValueFormat="&quot;&quot;" VerticalAlignment="Center"
                       AutomationProperties.Name="{DynamicResource S.Timeline.Position}" />
       <TextBlock x:Name="TimeText" Grid.Column="3" Classes="muted mono" VerticalAlignment="Center" />

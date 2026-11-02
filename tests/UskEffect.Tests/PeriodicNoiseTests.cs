@@ -96,6 +96,36 @@ public sealed class PeriodicNoiseTests(NoiseFixture fixture) : IClassFixture<Noi
     }
 
     [Theory]
+    [InlineData(StripeDirection.Vertical)]
+    [InlineData(StripeDirection.Horizontal)]
+    [InlineData(StripeDirection.Diagonal)]
+    public void Stripe_IsSeamless_AndRunsAlongItsDirection(StripeDirection direction)
+    {
+        var settings = Base(NoiseType.Stripe) with { StripeDirection = direction, Octaves = 1, Seam = SeamMode.XY };
+        var pixels = fixture.Generate(settings);
+
+        AssertSeamless(SeamAnalyzer.Horizontal(pixels, Size, Size), "X");
+        AssertSeamless(SeamAnalyzer.Vertical(pixels, Size, Size), "Y");
+
+        // 縦の帯は上下で変わらず、横の帯は左右で変わらない
+        float At(int x, int y) => pixels[y * Size + x];
+        if (direction == StripeDirection.Vertical)
+            Assert.Equal(At(10, 0), At(10, Size - 1), 1e-4f);
+        if (direction == StripeDirection.Horizontal)
+            Assert.Equal(At(0, 10), At(Size - 1, 10), 1e-4f);
+    }
+
+    [Fact]
+    public void StripeWidth_ChangesTheCoveredArea()
+    {
+        double Mean(float width) =>
+            fixture.Generate(Base(NoiseType.Stripe) with { StripeWidth = width, StripeSoftness = 0.02f, Octaves = 1 }).Average(p => (double)p);
+
+        Assert.Equal(0.25, Mean(0.25f), 0.05);
+        Assert.Equal(0.75, Mean(0.75f), 0.05);
+    }
+
+    [Theory]
     [InlineData(NoiseType.Perlin, 3)]
     [InlineData(NoiseType.Simplex, 3)]
     [InlineData(NoiseType.Worley, 4)]

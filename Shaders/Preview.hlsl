@@ -1,4 +1,4 @@
-// プレビュー描画: 矩形 / 3x3 タイル / 極座標 / シーム検証
+// プレビュー描画: 矩形 / 極座標 / シーム検証
 // 同じソーステクスチャを Wrap サンプラーで読み、UV スクロールでアニメーションさせる。
 
 cbuffer PreviewParams : register(b0)
@@ -6,7 +6,7 @@ cbuffer PreviewParams : register(b0)
     float2 ViewportSize;
     float2 TextureSize;
 
-    uint   ViewMode;          // 0: Rect, 1: Tile3x3, 2: Polar, 3: SeamCheck
+    uint   ViewMode;          // 0: Rect, 2: Polar, 3: SeamCheck
     float  Time;
     float2 ScrollSpeed;       // UV / 秒
 
@@ -22,9 +22,19 @@ cbuffer PreviewParams : register(b0)
 
     float3 StageColor;        // 内容の外側の色
     float  ContentMargin;     // 内容の周りの余白 [px]
+
+    float2 ViewPan;           // キャンバスの移動 [px]。src/UskEffect.Graphics/ImageData.cs の CanvasView と同じ式
+    float  ViewZoom;          // 全体表示を 1 とした拡大率
+    float  ViewRotation;      // ラジアン。画面上で時計回り
+
+    uint   SourceIsColor;     // 0: R チャンネルだけ使う (ノイズ), 1: RGBA (読み込んだ画像)
+    float3 _Padding;
+
+    float2 Tiling;            // UV の繰り返し数 (Unity のマテリアルと同じ)
+    float2 UvOffset;          // UV のずらし量
 };
 
-Texture2D<float> Source : register(t0);
+Texture2D<float4> Source : register(t0);
 SamplerState WrapSampler : register(s0);
 
 static const float TwoPi = 6.28318530718;
@@ -80,10 +90,27 @@ bool PolarToUv(float2 c, out float2 uv)
     return true;
 }
 
-float LoadWrapped(int2 texel)
+float4 LoadRaw(int2 texel)
 {
     int2 size = (int2)TextureSize;
     return Source.Load(int3((texel % size + size) % size, 0));
+}
+
+// 継ぎ目の解析と同じ輝度
+float Luminance(float4 s)
+{
+    return SourceIsColor != 0 ? dot(s.rgb, float3(0.299, 0.587, 0.114)) : s.r;
+}
+
+float LoadWrapped(int2 texel)
+{
+    return Luminance(LoadRaw(texel));
+}
+
+// 色にする。画像の透明部分には市松模様を透かす
+float3 Shade(float4 s, float2 pixel)
+{
+    return SourceIsColor != 0 ? lerp(Checker(pixel), s.rgb, s.a) : s.rrr;
 }
 
 // 周期境界を含めた局所差分を内部平均で割った比。継ぎ目があると境界の行・列で大きくなる
@@ -105,11 +132,15 @@ float SeamHeat(float2 uv)
 float4 PSMain(VSOutput input) : SV_Target
 {
     float2 pixel = input.ScreenUV * ViewportSize;
-    float tiles = ViewMode == 1 ? 3.0 : 1.0;
-    float2 content = ViewMode == 2 ? max(TextureSize.x, TextureSize.y).xx : TextureSize * tiles;
+    float2 content = ViewMode == 2 ? max(TextureSize.x, TextureSize.y).xx : TextureSize;
     float2 available = max(ViewportSize - ContentMargin * 2.0, 1.0);
-    float scale = min(available.x / content.x, available.y / content.y);
-    float2 local = (pixel - ViewportSize * 0.5) / (content * scale) + 0.5;
+    float scale = min(available.x / content.x, available.y / content.y) * ViewZoom;
+
+    // 画面 → 内容 (移動と回転の逆変換)
+    float2 p = pixel - ViewportSize * 0.5 - ViewPan;
+    float s = sin(-ViewRotation);
+    float c = cos(-ViewRotation);
+    float2 local = float2(c * p.x - s * p.y, s * p.x + c * p.y) / (content * scale) + 0.5;
 
     float2 scroll = ScrollSpeed * Time;
     float2 uv;
@@ -118,11 +149,11 @@ float4 PSMain(VSOutput input) : SV_Target
     {
         if (any(local < 0.0) || any(local > 1.0))
             return float4(Outside(local, content * scale), 1);
-        float2 c = local * 2.0 - 1.0;
-        c.y = -c.y;
-        if (!PolarToUv(c, uv))
+        float2 polar = local * 2.0 - 1.0;
+        polar.y = -polar.y;
+        if (!PolarToUv(polar, uv))
             return float4(Checker(pixel), 1);
-        uv += scroll;
+        uv = uv * Tiling + UvOffset + scroll;
     }
     else
     {
@@ -133,8 +164,7 @@ float4 PSMain(VSOutput input) : SV_Target
         {
             // 半タイルずらして、左右・上下の端を中央の十字に持ってくる
             uv = local + 0.5;
-            float n = Source.SampleLevel(WrapSampler, uv, 0);
-            float3 color = n.xxx * 0.75;
+            float3 color = Shade(Source.SampleLevel(WrapSampler, uv, 0), pixel) * 0.75;
             if (HeatmapMode != 0)
             {
                 float heat = SeamHeat(uv);
@@ -145,10 +175,13 @@ float4 PSMain(VSOutput input) : SV_Target
             return float4(color, 1);
         }
 
-        uv = local * tiles + scroll;
+        uv = local * Tiling + UvOffset + scroll;
+
+        // 大きく拡大したら画素の境界が見えるようにする
+        if (scale / max(Tiling.x, Tiling.y) >= 4.0)
+            return float4(Shade(LoadRaw((int2)floor(frac(uv) * TextureSize)), pixel), 1);
     }
 
     // atan2 の不連続でミップ選択が破綻しないよう LOD 0 固定
-    float n = Source.SampleLevel(WrapSampler, uv, 0);
-    return float4(n.xxx, 1);
+    return float4(Shade(Source.SampleLevel(WrapSampler, uv, 0), pixel), 1);
 }

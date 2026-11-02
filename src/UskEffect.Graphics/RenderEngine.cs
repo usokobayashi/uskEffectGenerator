@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using UskEffect.Graphics.Analysis;
 using UskEffect.Graphics.Effects;
+using Vortice.Direct3D11;
+using Vortice.DXGI;
 
 namespace UskEffect.Graphics;
 
@@ -42,7 +44,7 @@ public sealed class RenderEngine : IDisposable
 
     private readonly object _sync = new();
 
-    private readonly SwapChainTarget?[] _targets = new SwapChainTarget?[Enum.GetValues<SurfaceSlot>().Length];
+    private SwapChainTarget? _target;
     private volatile NoiseSettings _noiseSettings = new();
     private volatile bool _noiseDirty = true;
     private volatile bool _shadersDirty = true;
@@ -57,8 +59,16 @@ public sealed class RenderEngine : IDisposable
     private Task? _analysisTask;
     private volatile SeamAnalysis? _seamAnalysis;
 
+    // 読み込んだ画像。null ならノイズを表示する
+    private ImageData? _image;
+    private ID3D11Texture2D? _imageTexture;
+    private ID3D11ShaderResourceView? _imageView;
+
     public volatile PreviewSettings Preview = new();
     public volatile EffectSettings Effect = new();
+
+    /// <summary>中央のキャンバスの表示状態。UI スレッドから差し替える。</summary>
+    public volatile CanvasView View = new();
 
     /// <summary>エフェクトプレビューの再生位置。UI スレッドから再生操作できる。</summary>
     public EffectTimeline Timeline { get; } = new();
@@ -109,44 +119,86 @@ public sealed class RenderEngine : IDisposable
         }
     }
 
-    public void AttachSurface(SurfaceSlot slot, IntPtr hwnd, int width, int height)
+    public void AttachSurface(IntPtr hwnd, int width, int height)
     {
         lock (_sync)
         {
-            DetachSurfaceCore(slot);
-            _targets[(int)slot] = new SwapChainTarget(_gpu, hwnd, width, height);
+            DetachSurfaceCore();
+            _target = new SwapChainTarget(_gpu, hwnd, width, height);
         }
     }
 
-    public void DetachSurface(SurfaceSlot slot)
+    public void DetachSurface()
     {
         lock (_sync)
-            DetachSurfaceCore(slot);
+            DetachSurfaceCore();
     }
 
-    private void DetachSurfaceCore(SurfaceSlot slot)
+    private void DetachSurfaceCore()
     {
-        if (_targets[(int)slot] is not { } target)
+        if (_target is null)
             return;
         _gpu.Context.ClearState();
         _gpu.Context.Flush();
-        target.Dispose();
-        _targets[(int)slot] = null;
+        _target.Dispose();
+        _target = null;
     }
 
     public void ReloadShaders() => _shadersDirty = true;
 
-    /// <summary>
-    /// 全ての描画先を 1 フレーム描く。sizes は SurfaceSlot の順の画素サイズ。
-    /// 描けた描画先がなければ false を返す。
-    /// </summary>
-    public bool RenderFrame(ReadOnlySpan<(int Width, int Height)> sizes, out RenderStats stats)
+    /// <summary>表示する画像を差し替える。null でノイズに戻す。</summary>
+    public void SetImageSource(ImageData? image)
     {
         lock (_sync)
-            return RenderFrameCore(sizes, out stats);
+        {
+            if (ReferenceEquals(image, _image))
+                return;
+
+            _gpu.Context.PSSetShaderResource(0, null!);
+            _imageView?.Dispose();
+            _imageTexture?.Dispose();
+            _imageView = null;
+            _imageTexture = null;
+            _image = image;
+
+            if (image is not null)
+            {
+                var pinned = System.Runtime.InteropServices.GCHandle.Alloc(image.Rgba, System.Runtime.InteropServices.GCHandleType.Pinned);
+                try
+                {
+                    _imageTexture = _gpu.Device.CreateTexture2D(new Texture2DDescription
+                    {
+                        Width = (uint)image.Width,
+                        Height = (uint)image.Height,
+                        MipLevels = 1,
+                        ArraySize = 1,
+                        Format = Format.R8G8B8A8_UNorm,
+                        SampleDescription = new SampleDescription(1, 0),
+                        Usage = ResourceUsage.Immutable,
+                        BindFlags = BindFlags.ShaderResource,
+                    }, new SubresourceData(pinned.AddrOfPinnedObject(), (uint)(image.Width * 4)));
+                }
+                finally
+                {
+                    pinned.Free();
+                }
+                _imageView = _gpu.Device.CreateShaderResourceView(_imageTexture);
+            }
+
+            // 継ぎ目の解析をやり直す
+            _analysisPending = true;
+            _lastNoiseGenerated = _clock.Elapsed;
+        }
     }
 
-    private bool RenderFrameCore(ReadOnlySpan<(int Width, int Height)> sizes, out RenderStats stats)
+    /// <summary>1 フレーム描く。描画先がなければ何もせず false を返す。</summary>
+    public bool RenderFrame(int width, int height, out RenderStats stats)
+    {
+        lock (_sync)
+            return RenderFrameCore(width, height, out stats);
+    }
+
+    private bool RenderFrameCore(int width, int height, out RenderStats stats)
     {
         if (_shadersDirty)
         {
@@ -157,14 +209,13 @@ public sealed class RenderEngine : IDisposable
             _noiseDirty = true;
         }
 
-        bool rendered = false;
-        for (int i = 0; i < _targets.Length; i++)
-            rendered |= _targets[i] is not null && sizes[i].Width > 0 && sizes[i].Height > 0;
-
+        bool rendered = _target is not null && width > 0 && height > 0;
         if (rendered)
         {
+            _target!.Resize(width, height);
             _timer.BeginFrame();
-            if (_noiseDirty)
+            // 画像を表示している間はノイズを作らない。ノイズに戻したときに作り直す
+            if (_noiseDirty && _image is null)
             {
                 _noise.Generate(_noiseSettings);
                 _timer.MarkComputeDone();
@@ -172,6 +223,11 @@ public sealed class RenderEngine : IDisposable
                 _analysisPending = true;
                 _lastNoiseGenerated = _clock.Elapsed;
             }
+
+            bool isColor = _image is not null;
+            var sourceView = _imageView ?? _noise.ShaderResourceView;
+            int sourceWidth = _image?.Width ?? _noise.Width;
+            int sourceHeight = _image?.Height ?? _noise.Height;
 
             var now = _clock.Elapsed;
             Timeline.Advance((now - _lastFrameTime).TotalSeconds);
@@ -182,49 +238,25 @@ public sealed class RenderEngine : IDisposable
             var frame = EffectEvaluator.Evaluate(effect, preview, Timeline.Time, Timeline.NormalizedTime);
             float time = (float)now.TotalSeconds;
 
-            for (int i = 0; i < _targets.Length; i++)
+            if (preview.Mode == PreviewMode.Effect)
             {
-                if (_targets[i] is not { } target || sizes[i].Width <= 0 || sizes[i].Height <= 0)
-                    continue;
-                target.Resize(sizes[i].Width, sizes[i].Height);
-
-                var slot = (SurfaceSlot)i;
-                var mode = slot switch
-                {
-                    SurfaceSlot.Tile => PreviewMode.Tile3x3,
-                    SurfaceSlot.Polar => PreviewMode.Polar,
-                    SurfaceSlot.Effect => PreviewMode.Effect,
-                    _ => preview.Mode,
-                };
-                if (mode == PreviewMode.Effect)
-                {
-                    _effect.Render(target.RenderTargetView, target.Width, target.Height, _noise.ShaderResourceView,
-                        effect, preview.Polar, frame);
-                }
-                else
-                {
-                    _preview.Render(target, _noise.ShaderResourceView, _noise.Width, _noise.Height,
-                        preview with { Mode = mode }, time, _seamAnalysis,
-                        slot == SurfaceSlot.Main ? MainContentMargin : 0f);
-                }
+                _effect.Render(_target.RenderTargetView, _target.Width, _target.Height, sourceView,
+                    effect, preview.Polar, frame, isColor);
+            }
+            else
+            {
+                _preview.Render(_target.RenderTargetView, _target.Width, _target.Height, sourceView,
+                    sourceWidth, sourceHeight, isColor, preview, time, _seamAnalysis, MainContentMargin, View);
             }
             _timer.EndFrame();
-
-            // 同期待ちは最後の 1 回だけにする (描画先の数だけ待つと fps が落ちる)
-            for (int i = 1; i < _targets.Length; i++)
-            {
-                if (_targets[i] is { } thumbnail && sizes[i].Width > 0 && sizes[i].Height > 0)
-                    thumbnail.Present(false);
-            }
-            if (_targets[0] is { } main && sizes[0].Width > 0 && sizes[0].Height > 0)
-                main.Present(VSync);
+            _target.Present(VSync);
             StartSeamAnalysisIfIdle();
         }
 
         var errorList = new[] { _noiseErrors, _previewErrors, _effectErrors }.Where(e => e is not null).ToList();
         string? errors = errorList.Count == 0 ? null : string.Join(Environment.NewLine, errorList);
-        stats = new RenderStats(_gpu.AdapterName, _noise.Width, _noise.Height,
-            _targets[0]?.Width ?? 0, _targets[0]?.Height ?? 0,
+        stats = new RenderStats(_gpu.AdapterName, _image?.Width ?? _noise.Width, _image?.Height ?? _noise.Height,
+            _target?.Width ?? 0, _target?.Height ?? 0,
             _timer.ComputeMilliseconds, _timer.FrameMilliseconds, errors,
             _seamAnalysis, _analysisPending || _analysisTask is { IsCompleted: false });
         return rendered;
@@ -268,6 +300,12 @@ public sealed class RenderEngine : IDisposable
             return; // 前の解析が終わってから。終わった時点でまだ pending なら次フレームで再解析する
 
         _analysisPending = false;
+        if (_image is { } image)
+        {
+            _analysisTask = Task.Run(() => _seamAnalysis = SeamAnalyzer.Analyze(image.ToLuminance(), image.Width, image.Height));
+            return;
+        }
+
         float[] pixels = _noise.ReadPixels();
         int width = _noise.Width, height = _noise.Height;
         if (pixels.Length == 0)
@@ -281,8 +319,9 @@ public sealed class RenderEngine : IDisposable
         _analysisTask?.Wait();
         lock (_sync)
         {
-            foreach (var slot in Enum.GetValues<SurfaceSlot>())
-                DetachSurfaceCore(slot);
+            DetachSurfaceCore();
+            _imageView?.Dispose();
+            _imageTexture?.Dispose();
             _timer.Dispose();
             _effect.Dispose();
             _preview.Dispose();

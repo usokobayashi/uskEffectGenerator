@@ -5,7 +5,7 @@ using UskEffect.Graphics.Analysis;
 
 namespace UskEffect.Graphics;
 
-/// <summary>ソーステクスチャを矩形・3x3 タイル・極座標のいずれかで描画する。</summary>
+/// <summary>ソーステクスチャを矩形・極座標・シーム検証のいずれかで描画する。</summary>
 public sealed class PreviewRenderer : IDisposable
 {
     // キャンバスの周りの色。UI の Ue.Stage (#111417) と同じ値
@@ -39,20 +39,22 @@ public sealed class PreviewRenderer : IDisposable
         return null;
     }
 
-    public void Render(SwapChainTarget target, ID3D11ShaderResourceView? source, int sourceWidth, int sourceHeight,
-        PreviewSettings settings, float timeSeconds, SeamAnalysis? seam, float contentMargin)
+    public void Render(ID3D11RenderTargetView target, int width, int height, ID3D11ShaderResourceView? source,
+        int sourceWidth, int sourceHeight, bool sourceIsColor,
+        PreviewSettings settings, float timeSeconds, SeamAnalysis? seam, float contentMargin, CanvasView? view = null)
     {
+        view ??= new CanvasView();
         var context = _gpu.Context;
-        context.OMSetRenderTargets(target.RenderTargetView);
-        context.ClearRenderTargetView(target.RenderTargetView, StageColor);
+        context.OMSetRenderTargets(target);
+        context.ClearRenderTargetView(target, StageColor);
 
         if (_vertexShader is null || _pixelShader is null || source is null)
             return;
 
         var constants = new PreviewConstants
         {
-            ViewportWidth = target.Width,
-            ViewportHeight = target.Height,
+            ViewportWidth = width,
+            ViewportHeight = height,
             TextureWidth = sourceWidth,
             TextureHeight = sourceHeight,
             ViewMode = (uint)settings.Mode,
@@ -72,10 +74,19 @@ public sealed class PreviewRenderer : IDisposable
             StageG = StageColor.G,
             StageB = StageColor.B,
             ContentMargin = contentMargin,
+            ViewPanX = (float)view.PanX,
+            ViewPanY = (float)view.PanY,
+            ViewZoom = (float)view.Zoom,
+            ViewRotation = (float)(view.RotationDegrees * Math.PI / 180),
+            SourceIsColor = sourceIsColor ? 1u : 0u,
+            TilingX = settings.TilingX,
+            TilingY = settings.TilingY,
+            OffsetX = settings.OffsetX,
+            OffsetY = settings.OffsetY,
         };
         context.UpdateSubresource(constants, _constantBuffer);
 
-        context.RSSetViewport(0, 0, target.Width, target.Height);
+        context.RSSetViewport(0, 0, width, height);
         context.IASetInputLayout(null);
         context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
         context.VSSetShader(_vertexShader);

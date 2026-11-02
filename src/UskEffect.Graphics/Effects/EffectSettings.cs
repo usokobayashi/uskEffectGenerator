@@ -73,7 +73,8 @@ public readonly record struct EffectFrame(
     float DissolveThreshold,
     float Alpha,
     Vector3 Color,
-    Vector2 ScrollOffset);
+    Vector2 ScrollOffset,
+    Vector2 Tiling = default);
 
 public static class EffectEvaluator
 {
@@ -85,7 +86,7 @@ public static class EffectEvaluator
         float t = (float)Math.Clamp(normalizedTime, 0, 1);
 
         // 時刻が大きくなっても float の精度が落ちないよう、スクロール量は 1 周 (UV 1.0) で折り返す
-        var scroll = new Vector2(Wrap(preview.ScrollSpeedU * time), Wrap(preview.ScrollSpeedV * time));
+        var scroll = new Vector2(Wrap(preview.ScrollSpeedU * time + preview.OffsetX), Wrap(preview.ScrollSpeedV * time + preview.OffsetY));
 
         return new EffectFrame(
             Lerp(effect.Rotation, t) * (MathF.PI / 180f),
@@ -93,7 +94,8 @@ public static class EffectEvaluator
             DissolveThreshold(Lerp(effect.Dissolve, t), effect.DissolveEdgeWidth),
             Math.Clamp(Lerp(effect.Alpha, t), 0f, 1f),
             Vector3.Lerp(effect.Color.Start, effect.Color.End, t),
-            scroll);
+            scroll,
+            new Vector2(preview.TilingX, preview.TilingY));
     }
 
     /// <summary>

@@ -68,8 +68,38 @@ public sealed class ProjectFileTests : IDisposable
         using var reader = new StreamReader(zip.GetEntry("project.json")!.Open());
         string json = reader.ReadToEnd();
 
-        Assert.Contains("\"formatVersion\": 1", json);
+        Assert.Contains($"\"formatVersion\": {ProjectFile.CurrentFormatVersion}", json);
         Assert.Contains("\"Type\": \"Simplex\"", json); // 列挙は名前で保存 (手で読める・並べ替えに強い)
+    }
+
+    [Fact]
+    public void Image_IsSavedInsideTheProject_AndRestored()
+    {
+        var image = new ImageData(2, 2, [255, 0, 0, 255, 0, 255, 0, 128, 0, 0, 255, 255, 10, 20, 30, 40]);
+        string path = PathFor("image.uskfx");
+
+        ProjectFile.Save(path, new ProjectDocument
+        {
+            Image = image,
+            Source = new SourceSettings { Kind = SourceKind.Image, ImageName = "a.png" },
+        });
+        var loaded = ProjectFile.Load(path);
+
+        Assert.Equal(SourceKind.Image, loaded.Source.Kind);
+        Assert.Equal("a.png", loaded.Source.ImageName);
+        Assert.Equal(image.Rgba, loaded.Image!.Rgba);
+    }
+
+    [Fact]
+    public void OldVersionOneFile_StillOpens()
+    {
+        string path = PathFor("old.uskfx");
+        WriteRawProject(path, """{ "formatVersion": 1, "Preview": { "Mode": "Tile3x3" } }""");
+
+        var loaded = ProjectFile.Load(path);
+
+        Assert.Equal(PreviewMode.Tile3x3, loaded.Preview.Mode);
+        Assert.Null(loaded.Image);
     }
 
     [Fact]

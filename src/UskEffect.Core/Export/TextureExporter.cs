@@ -20,6 +20,9 @@ public enum ExportChannels
 
     /// <summary>RGB は白、A に値。エフェクト用のアルファマスク。</summary>
     RgbaWhiteAlpha,
+
+    /// <summary>読み込んだ画像の RGBA をそのまま。ノイズでは RgbaOpaque と同じ。</summary>
+    RgbaSource,
 }
 
 /// <summary>0..1 の float テクスチャを PNG / TGA に書き出す。</summary>
@@ -46,7 +49,35 @@ public static class TextureExporter
         File.Move(temp, path, overwrite: true);
     }
 
-    public static void Write(Stream output, ImageFileFormat format, float[] pixels, int width, int height, ExportChannels channels)
+    /// <summary>読み込んだ画像を書き出す。グレースケールと白 + アルファは輝度を使う。</summary>
+    public static void SaveImage(string path, UskEffect.Graphics.ImageData image, ExportChannels channels)
+    {
+        var format = FormatFromPath(path);
+        string temp = path + ".tmp";
+        using (var stream = File.Create(temp))
+        {
+            if (channels == ExportChannels.RgbaSource)
+                WriteRgba(stream, format, image.Width, image.Height, image.Rgba);
+            else
+                Write(stream, format, image.ToLuminanceForChannels(channels), image.Width, image.Height, channels, image);
+        }
+        File.Move(temp, path, overwrite: true);
+    }
+
+    private static void WriteRgba(Stream output, ImageFileFormat format, int width, int height, byte[] rgba)
+    {
+        if (format == ImageFileFormat.Png)
+            PngEncoder.Write(output, width, height, PngColorType.Rgba, 8, rgba);
+        else
+            TgaEncoder.WriteRgba(output, width, height, rgba);
+    }
+
+    private static float[] ToLuminanceForChannels(this UskEffect.Graphics.ImageData image, ExportChannels channels) => image.ToLuminance();
+
+    public static void Write(Stream output, ImageFileFormat format, float[] pixels, int width, int height, ExportChannels channels) =>
+        Write(output, format, pixels, width, height, channels, null);
+
+    private static void Write(Stream output, ImageFileFormat format, float[] pixels, int width, int height, ExportChannels channels, UskEffect.Graphics.ImageData? image)
     {
         if (pixels.Length != width * height)
             throw new ArgumentException("画素数が合わない");
@@ -69,11 +100,19 @@ public static class TextureExporter
                 break;
             default:
             {
-                var rgba = ToRgba(pixels, channels == ExportChannels.RgbaWhiteAlpha);
-                if (format == ImageFileFormat.Png)
-                    PngEncoder.Write(output, width, height, PngColorType.Rgba, 8, rgba);
+                byte[] rgba;
+                if (image is not null && channels == ExportChannels.RgbaOpaque)
+                {
+                    // 画像の RGB を保ち、A だけ 255 にする
+                    rgba = (byte[])image.Rgba.Clone();
+                    for (int i = 3; i < rgba.Length; i += 4)
+                        rgba[i] = 255;
+                }
                 else
-                    TgaEncoder.WriteRgba(output, width, height, rgba);
+                {
+                    rgba = ToRgba(pixels, channels == ExportChannels.RgbaWhiteAlpha);
+                }
+                WriteRgba(output, format, width, height, rgba);
                 break;
             }
         }

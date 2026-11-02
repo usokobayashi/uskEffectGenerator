@@ -5,7 +5,7 @@ using UskEffect.Graphics;
 namespace UskEffect.Tests;
 
 /// <summary>
-/// 中央 + プレビュー 3 つの描画負荷を計測する。表示しない窓に描くので利用者の画面に出ない。
+/// キャンバスの描画負荷を計測する。表示しない窓に描くので利用者の画面に出ない。
 /// DWM の合成は含まないので、実画面の fps の代わりにはならない。実行: --filter-method で指定し、Explicit を許可する。
 /// </summary>
 public sealed class RenderBudgetTests(ITestOutputHelper output)
@@ -25,12 +25,11 @@ public sealed class RenderBudgetTests(ITestOutputHelper output)
         string shaders = Path.Combine(NoiseFixture.FindRepositoryRoot(), "Shaders");
         using var engine = new RenderEngine(shaders) { VSync = false };
 
-        (int Width, int Height)[] sizes = [(916, 672), (92, 92), (92, 92), (92, 92)];
-        var windows = sizes.Select(s => CreateWindowEx(0, "STATIC", null, WS_POPUP, 0, 0, s.Width, s.Height, 0, 0, 0, 0)).ToArray();
+        const int width = 916, height = 672;
+        var window = CreateWindowEx(0, "STATIC", null, WS_POPUP, 0, 0, width, height, 0, 0, 0, 0);
         try
         {
-            for (int i = 0; i < windows.Length; i++)
-                engine.AttachSurface((SurfaceSlot)i, windows[i], sizes[i].Width, sizes[i].Height);
+            engine.AttachSurface(window, width, height);
 
             double Median(int frames, Action<int> before)
             {
@@ -39,7 +38,7 @@ public sealed class RenderBudgetTests(ITestOutputHelper output)
                 {
                     before(f);
                     long start = Stopwatch.GetTimestamp();
-                    engine.RenderFrame(sizes, out _);
+                    engine.RenderFrame(width, height, out _);
                     samples[f] = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
                 }
                 Array.Sort(samples);
@@ -59,10 +58,8 @@ public sealed class RenderBudgetTests(ITestOutputHelper output)
         }
         finally
         {
-            foreach (var slot in Enum.GetValues<SurfaceSlot>())
-                engine.DetachSurface(slot);
-            foreach (var window in windows)
-                DestroyWindow(window);
+            engine.DetachSurface();
+            DestroyWindow(window);
         }
     }
 }

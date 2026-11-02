@@ -4,6 +4,8 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using System.Text.Unicode;
+using UskEffect.Core.Export;
+using UskEffect.Core.Imaging;
 
 namespace UskEffect.Core.Project;
 
@@ -18,9 +20,11 @@ public static class ProjectFile
     public const string Extension = ".uskfx";
 
     /// <summary>形式を変えたら上げる。読込時、これより新しい形式は拒否する。</summary>
-    public const int CurrentFormatVersion = 1;
+    /// 1: 設定のみ。2: 読み込んだ画像を images/source.png に保存。
+    public const int CurrentFormatVersion = 2;
 
     private const string JsonEntryName = "project.json";
+    private const string ImageEntryName = "images/source.png";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -45,6 +49,15 @@ public static class ProjectFile
             var entry = zip.CreateEntry(JsonEntryName, CompressionLevel.Optimal);
             using var writer = entry.Open();
             JsonSerializer.Serialize(writer, json, JsonOptions);
+            writer.Dispose();
+
+            if (document.Image is { } image)
+            {
+                // PNG 自体が圧縮済みなので ZIP では圧縮しない
+                var imageEntry = zip.CreateEntry(ImageEntryName, CompressionLevel.NoCompression);
+                using var imageStream = imageEntry.Open();
+                PngEncoder.Write(imageStream, image.Width, image.Height, PngColorType.Rgba, 8, image.Rgba);
+            }
         }
         File.Move(temp, path, overwrite: true);
     }
@@ -65,7 +78,16 @@ public static class ProjectFile
 
             json.Remove("formatVersion");
             json.Remove("application");
-            return json.Deserialize<ProjectDocument>(JsonOptions) ?? new ProjectDocument();
+            var document = json.Deserialize<ProjectDocument>(JsonOptions) ?? new ProjectDocument();
+
+            if (zip.GetEntry(ImageEntryName) is { } imageEntry)
+            {
+                using var imageStream = imageEntry.Open();
+                using var buffer = new MemoryStream();
+                imageStream.CopyTo(buffer);
+                document = document with { Image = ImageLoader.DecodeWithWic(buffer.ToArray()) };
+            }
+            return document;
         }
         catch (InvalidDataException ex)
         {
@@ -74,6 +96,10 @@ public static class ProjectFile
         catch (JsonException ex)
         {
             throw new ProjectFormatException($"project.json を読めません: {ex.Message}", ex);
+        }
+        catch (ImageLoadException ex)
+        {
+            throw new ProjectFormatException($"保存された画像を読めません: {ex.Message}", ex);
         }
     }
 }

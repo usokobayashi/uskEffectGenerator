@@ -12,12 +12,11 @@
   </Application.Resources>
   <Application.Styles>
     <FluentTheme>
-      <!-- メニューや色選択など、標準のまま使う部品もアプリの配色にそろえる -->
+      <!-- メニューなど、標準のまま使う部品もアプリの配色にそろえる -->
       <FluentTheme.Palettes>
         <ColorPaletteResources x:Key="Dark" Accent="#56C8D0" RegionColor="#262B30" BaseHigh="#E4E8EB" BaseMedium="#A3ACB4" />
       </FluentTheme.Palettes>
     </FluentTheme>
-    <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml" />
     <StyleInclude Source="/Theme/Styles.axaml" />
   </Application.Styles>
 </Application>

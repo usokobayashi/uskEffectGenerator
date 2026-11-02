@@ -12,7 +12,7 @@ cbuffer NoiseParams : register(b0)
     float BaseFrequency;
     float Persistence;
     uint  SeamMode;      // bit0: X, bit1: Y
-    uint  NoiseType;     // 0: Perlin, 1: Worley, 2: Simplex
+    uint  NoiseType;     // 0: Perlin, 1: Worley, 2: Simplex, 3: Stripe
 
     float Lacunarity;
     uint  FractalMode;   // 0: FBM, 1: Ridged, 2: Turbulence
@@ -23,6 +23,11 @@ cbuffer NoiseParams : register(b0)
     float Brightness;
     uint  Invert;
     float _Padding;
+
+    uint  StripeDirection;  // 0: 縦の帯, 1: 横の帯, 2: 斜めの帯
+    float StripeWidth;      // 帯の幅 (周期に対する割合)
+    float StripeSoftness;   // 帯の縁のぼかし (周期に対する割合)
+    float _Padding2;
 };
 
 RWTexture2D<float> Output : register(u0);
@@ -185,6 +190,21 @@ float4 TorusCoord(float2 uv, float frequency)
 }
 
 // ---------------------------------------------------------------------------
+// Stripe (帯)。周波数が整数なので、どの方向でも上下左右がつながる。戻り値は [0, 1]
+// ---------------------------------------------------------------------------
+
+float Stripe(float2 uv, float frequency, uint seed)
+{
+    float2 direction = StripeDirection == 0 ? float2(1, 0) : StripeDirection == 1 ? float2(0, 1) : float2(1, 1);
+    float phase = dot(uv, direction) * frequency + (Hash(seed) & 0xFFFFu) / 65536.0;
+    float halfWidth = StripeWidth * 0.5;
+    float soft = max(StripeSoftness * 0.5, 1e-3);
+    // 周期を折り返した、帯の中心からの距離
+    float distance = abs(frac(phase) - 0.5);
+    return 1.0 - smoothstep(halfWidth - soft, halfWidth + soft, distance);
+}
+
+// ---------------------------------------------------------------------------
 // 合成
 // ---------------------------------------------------------------------------
 
@@ -204,6 +224,8 @@ float BaseNoise(float2 uv, float frequency, uint seed)
     }
     if (NoiseType == 2)
         return Simplex4D(TorusCoord(uv, frequency), seed) * 0.5 + 0.5;
+    if (NoiseType == 3)
+        return Stripe(uv, frequency, seed);
 
     return Perlin(uv * frequency, period, seed) * 0.5 + 0.5;
 }

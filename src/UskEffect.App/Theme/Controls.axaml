@@ -89,35 +89,40 @@
     </Style>
   </ControlTheme>
 
-  <!-- 一体型の調整欄 -->
+  <!-- 調整欄。既定は Unity のインスペクターと同じ「項目名 | スライダー | 数値」。.compact は欄全体がスライダーの一体型 -->
   <ControlTheme x:Key="{x:Type ui:SliderField}" TargetType="ui:SliderField">
     <Setter Property="Height" Value="{StaticResource Ue.Size.Field}" />
     <Setter Property="Background" Value="{StaticResource Ue.Raised}" />
     <Setter Property="Foreground" Value="{StaticResource Ue.Text}" />
     <Setter Property="CornerRadius" Value="{StaticResource Ue.Radius}" />
-    <Setter Property="Cursor" Value="SizeWestEast" />
     <Setter Property="Focusable" Value="True" />
-    <Setter Property="Transitions">
-      <Transitions>
-        <BrushTransition Property="Background" Duration="{StaticResource Ue.Motion.Fast}" Easing="{StaticResource Ue.Ease}" />
-      </Transitions>
-    </Setter>
     <Setter Property="Template">
       <ControlTemplate>
-        <Border Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}" ClipToBounds="True">
-          <Panel>
-            <Border Name="PART_Fill" Background="{StaticResource Ue.Fill}" HorizontalAlignment="Left" />
-            <Grid Margin="{StaticResource Ue.Pad.Field}" ColumnDefinitions="Auto,Auto,*,Auto">
-              <TextBlock Text="{TemplateBinding Label}" VerticalAlignment="Center" />
-              <Border Grid.Column="1" Classes="help" IsVisible="{TemplateBinding HelpText, Converter={x:Static ObjectConverters.IsNotNull}}"
-                      ToolTip.Tip="{TemplateBinding HelpText}" ToolTip.ShowDelay="300">
-                <TextBlock Text="?" FontSize="{StaticResource Ue.FontSize.Help}" HorizontalAlignment="Center" VerticalAlignment="Center"
-                           Foreground="{StaticResource Ue.Muted}" />
-              </Border>
-              <TextBlock Name="PART_Value" Grid.Column="3" FontFamily="{StaticResource Ue.Font.Mono}" VerticalAlignment="Center" />
-            </Grid>
+        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="{StaticResource Ue.Gap.Normal}" Background="{StaticResource Ue.Transparent}">
+          <Grid Width="{StaticResource Ue.Size.RowLabel}" ColumnDefinitions="*,Auto">
+            <TextBlock Text="{TemplateBinding Label}" ToolTip.Tip="{TemplateBinding Label}" Foreground="{StaticResource Ue.Muted}"
+                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            <Border Grid.Column="1" Classes="help" IsVisible="{TemplateBinding HelpText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                    ToolTip.Tip="{TemplateBinding HelpText}" ToolTip.ShowDelay="300">
+              <TextBlock Text="?" FontSize="{StaticResource Ue.FontSize.Help}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                         Foreground="{StaticResource Ue.Muted}" />
+            </Border>
+          </Grid>
+          <Panel Name="PART_Track" Grid.Column="1" Background="{StaticResource Ue.Transparent}" Cursor="SizeWestEast">
+            <Border Background="{StaticResource Ue.Raised}" Height="{StaticResource Ue.Size.Track}" CornerRadius="{StaticResource Ue.RadiusInner}" VerticalAlignment="Center" />
+            <Border Name="PART_Middle" Classes="middleTick" IsVisible="False" />
+            <Border Name="PART_Fill" Background="{StaticResource Ue.Accent}" Height="{StaticResource Ue.Size.Track}" CornerRadius="{StaticResource Ue.RadiusInner}"
+                    HorizontalAlignment="Left" VerticalAlignment="Center" />
+            <Border Name="PART_Knob" Background="{StaticResource Ue.Text}" Width="{StaticResource Ue.Size.Knob}" Height="{StaticResource Ue.Size.Knob}"
+                    CornerRadius="{StaticResource Ue.RadiusKnob}" HorizontalAlignment="Left" VerticalAlignment="Center" />
           </Panel>
-        </Border>
+          <Panel Name="PART_ValueBox" Grid.Column="2" Width="{StaticResource Ue.Size.ValueBox}" Background="{StaticResource Ue.Transparent}" Cursor="IBeam">
+            <Border Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}">
+              <TextBlock Name="PART_Value" FontFamily="{StaticResource Ue.Font.Mono}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <TextBox Name="PART_Editor" IsVisible="False" Classes="fieldEditor" TextAlignment="Center" />
+          </Panel>
+        </Grid>
       </ControlTemplate>
     </Setter>
     <Style Selector="^ /template/ Border#PART_Fill">
@@ -127,8 +132,61 @@
         </Transitions>
       </Setter>
     </Style>
-    <Style Selector="^:pointerover"><Setter Property="Background" Value="{StaticResource Ue.Hover}" /></Style>
+    <Style Selector="^ /template/ Border#PART_Knob">
+      <Setter Property="Transitions">
+        <Transitions>
+          <TransformOperationsTransition Property="RenderTransform" Duration="{StaticResource Ue.Motion.Fill}" Easing="{StaticResource Ue.Ease}" />
+          <BrushTransition Property="Background" Duration="{StaticResource Ue.Motion.Fast}" Easing="{StaticResource Ue.Ease}" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="^:pointerover /template/ Border#PART_Knob"><Setter Property="Background" Value="{StaticResource Ue.Accent}" /></Style>
     <Style Selector="^:disabled"><Setter Property="Opacity" Value="{StaticResource Ue.Size.DisabledOpacity}" /></Style>
+
+    <Style Selector="^.compact">
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Panel>
+            <Border Name="PART_Track" Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}" ClipToBounds="True" Cursor="SizeWestEast">
+              <Panel>
+                <Border Name="PART_Fill" Background="{StaticResource Ue.Fill}" HorizontalAlignment="Left" />
+                <Grid Margin="{StaticResource Ue.Pad.Field}" ColumnDefinitions="Auto,*,Auto">
+                  <TextBlock Text="{TemplateBinding Label}" VerticalAlignment="Center" />
+                  <TextBlock Name="PART_Value" Grid.Column="2" FontFamily="{StaticResource Ue.Font.Mono}" VerticalAlignment="Center" />
+                </Grid>
+              </Panel>
+            </Border>
+            <TextBox Name="PART_Editor" IsVisible="False" Classes="fieldEditor" TextAlignment="Center" />
+          </Panel>
+        </ControlTemplate>
+      </Setter>
+    </Style>
+    <Style Selector="^.compact:pointerover"><Setter Property="Background" Value="{StaticResource Ue.Hover}" /></Style>
+  </ControlTheme>
+
+  <!-- リンクボタン (Vector2 の X と Y を同じ値にする) -->
+  <ControlTheme x:Key="{x:Type ui:LinkToggle}" TargetType="ui:LinkToggle">
+    <Setter Property="Width" Value="{StaticResource Ue.Size.Field}" />
+    <Setter Property="Height" Value="{StaticResource Ue.Size.Field}" />
+    <Setter Property="Background" Value="{StaticResource Ue.Transparent}" />
+    <Setter Property="CornerRadius" Value="{StaticResource Ue.Radius}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="{StaticResource Ue.Motion.Fast}" Easing="{StaticResource Ue.Ease}" />
+      </Transitions>
+    </Setter>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}">
+          <Path Name="PART_Icon" Classes="stroke" Data="{StaticResource Icon.Link}" Stroke="{StaticResource Ue.Muted}"
+                Width="{StaticResource Ue.Size.Icon}" Height="{StaticResource Ue.Size.Icon}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover"><Setter Property="Background" Value="{StaticResource Ue.Hover}" /></Style>
+    <Style Selector="^:checked"><Setter Property="Background" Value="{StaticResource Ue.Fill}" /></Style>
+    <Style Selector="^:checked /template/ Path#PART_Icon"><Setter Property="Stroke" Value="{StaticResource Ue.Accent}" /></Style>
   </ControlTheme>
 
   <!-- 滑るボタン群 -->
@@ -364,7 +422,7 @@
     <Setter Property="Cursor" Value="IBeam" />
     <Setter Property="Template">
       <ControlTemplate>
-        <Border Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}" Padding="{TemplateBinding Padding}">
+        <Border Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}" Padding="{TemplateBinding Padding}" ClipToBounds="True">
           <Panel VerticalAlignment="{TemplateBinding VerticalContentAlignment}">
             <TextBlock Name="PART_Placeholder" Text="{TemplateBinding PlaceholderText}" Foreground="{StaticResource Ue.Muted}"
                        IsVisible="{TemplateBinding Text, Converter={x:Static StringConverters.IsNullOrEmpty}}" />

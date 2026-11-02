@@ -14,6 +14,7 @@
             <MenuItem x:Name="SaveMenuItem" Header="{DynamicResource S.Menu.Save}" InputGesture="Ctrl+S" HotKey="Ctrl+S" />
             <MenuItem x:Name="SaveAsMenuItem" Header="{DynamicResource S.Menu.SaveAs}" InputGesture="Ctrl+Shift+S" HotKey="Ctrl+Shift+S" />
             <Separator />
+            <MenuItem x:Name="LoadImageMenuItem" Header="{DynamicResource S.Menu.LoadImage}" InputGesture="Ctrl+I" HotKey="Ctrl+I" />
             <MenuItem x:Name="ExportMenuItem" Header="{DynamicResource S.Menu.Export}" InputGesture="Ctrl+E" HotKey="Ctrl+E" />
             <Separator />
             <MenuItem x:Name="ExitMenuItem" Header="{DynamicResource S.Menu.Exit}" />
@@ -24,10 +25,13 @@
           </MenuItem>
           <MenuItem Header="{DynamicResource S.Menu.View}">
             <MenuItem x:Name="ViewRectMenuItem" Header="{DynamicResource S.View.Rect}" />
-            <MenuItem x:Name="ViewTileMenuItem" Header="{DynamicResource S.View.Tile}" />
             <MenuItem x:Name="ViewPolarMenuItem" Header="{DynamicResource S.View.Polar}" />
             <MenuItem x:Name="ViewSeamMenuItem" Header="{DynamicResource S.View.Seam}" />
             <MenuItem x:Name="ViewEffectMenuItem" Header="{DynamicResource S.View.Effect}" />
+            <Separator />
+            <MenuItem x:Name="ZoomFitMenuItem" Header="{DynamicResource S.Menu.ZoomFit}" InputGesture="Ctrl+0" HotKey="Ctrl+D0" />
+            <MenuItem x:Name="Zoom100MenuItem" Header="{DynamicResource S.Menu.Zoom100}" InputGesture="Ctrl+1" HotKey="Ctrl+D1" />
+            <MenuItem x:Name="ResetRotationMenuItem" Header="{DynamicResource S.Menu.ResetRotation}" />
           </MenuItem>
           <MenuItem Header="{DynamicResource S.Menu.Help}">
             <MenuItem x:Name="AboutMenuItem" Header="{DynamicResource S.Menu.About}" />
@@ -51,6 +55,7 @@
                   <ComboBoxItem Content="{DynamicResource S.Export.Gray16}" />
                   <ComboBoxItem Content="{DynamicResource S.Export.RgbaOpaque}" />
                   <ComboBoxItem Content="{DynamicResource S.Export.RgbaWhiteAlpha}" />
+                  <ComboBoxItem Content="{DynamicResource S.Export.RgbaSource}" />
                 </ComboBox>
                 <Button x:Name="ExportRunButton" Classes="btn" Content="{DynamicResource S.Export.Run}" HorizontalAlignment="Right" />
               </StackPanel>

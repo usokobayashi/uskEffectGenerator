@@ -36,17 +36,17 @@
 
     <ui:SectionHeader x:Name="MotionHeader" Content="{DynamicResource S.Effect.Motion}" />
     <StackPanel Spacing="{StaticResource Ue.Gap.Row}" IsVisible="{Binding #MotionHeader.IsChecked}" x:CompileBindings="False">
-      <ui:SliderField x:Name="ScrollUField" Label="{DynamicResource S.Effect.ScrollU}" Minimum="-1" Maximum="1" Value="0" Step="0.01" ValueFormat="0.00 /s" />
-      <ui:SliderField x:Name="ScrollVField" Label="{DynamicResource S.Effect.ScrollV}" Minimum="-1" Maximum="1" Value="0" Step="0.01" ValueFormat="0.00 /s" />
+      <ui:Vector2Row x:Name="ScrollRow" Label="{DynamicResource S.Effect.Scroll}" LabelX="{DynamicResource S.Effect.ScrollX}" LabelY="{DynamicResource S.Effect.ScrollY}"
+                     Minimum="-1" Maximum="1" Step="0.01" ValueFormat="0.00" Value="0" />
       <Grid ColumnDefinitions="Auto,*,*" ColumnSpacing="{StaticResource Ue.Gap.Line}">
         <TextBlock Classes="rowLabel" Text="{DynamicResource S.Effect.Rotation}" />
-        <ui:SliderField x:Name="RotationStartField" Grid.Column="1" Label="{DynamicResource S.Effect.Start}" Minimum="-360" Maximum="360" Value="0" Step="1" ValueFormat="0°" />
-        <ui:SliderField x:Name="RotationEndField" Grid.Column="2" Label="{DynamicResource S.Effect.End}" Minimum="-360" Maximum="360" Value="0" Step="1" ValueFormat="0°" />
+        <ui:SliderField x:Name="RotationStartField" Grid.Column="1" Classes="compact" Label="{DynamicResource S.Effect.Start}" Minimum="-360" Maximum="360" Value="0" Step="1" ValueFormat="0°" />
+        <ui:SliderField x:Name="RotationEndField" Grid.Column="2" Classes="compact" Label="{DynamicResource S.Effect.End}" Minimum="-360" Maximum="360" Value="0" Step="1" ValueFormat="0°" />
       </Grid>
       <Grid ColumnDefinitions="Auto,*,*" ColumnSpacing="{StaticResource Ue.Gap.Line}">
         <TextBlock Classes="rowLabel" Text="{DynamicResource S.Effect.Scale}" />
-        <ui:SliderField x:Name="ScaleStartField" Grid.Column="1" Label="{DynamicResource S.Effect.Start}" Minimum="0.1" Maximum="2" Value="1" Step="0.01" />
-        <ui:SliderField x:Name="ScaleEndField" Grid.Column="2" Label="{DynamicResource S.Effect.End}" Minimum="0.1" Maximum="2" Value="1" Step="0.01" />
+        <ui:SliderField x:Name="ScaleStartField" Grid.Column="1" Classes="compact" Label="{DynamicResource S.Effect.Start}" Minimum="0.1" Maximum="2" Value="1" Step="0.01" IsExpandable="True" />
+        <ui:SliderField x:Name="ScaleEndField" Grid.Column="2" Classes="compact" Label="{DynamicResource S.Effect.End}" Minimum="0.1" Maximum="2" Value="1" Step="0.01" IsExpandable="True" />
       </Grid>
     </StackPanel>
 
@@ -54,13 +54,13 @@
     <StackPanel Spacing="{StaticResource Ue.Gap.Row}" IsVisible="{Binding #LookHeader.IsChecked}" x:CompileBindings="False">
       <Grid ColumnDefinitions="Auto,*,*" ColumnSpacing="{StaticResource Ue.Gap.Line}">
         <TextBlock Classes="rowLabel" Text="{DynamicResource S.Effect.Alpha}" />
-        <ui:SliderField x:Name="AlphaStartField" Grid.Column="1" Label="{DynamicResource S.Effect.Start}" Minimum="0" Maximum="1" Value="1" Step="0.01" />
-        <ui:SliderField x:Name="AlphaEndField" Grid.Column="2" Label="{DynamicResource S.Effect.End}" Minimum="0" Maximum="1" Value="1" Step="0.01" />
+        <ui:SliderField x:Name="AlphaStartField" Grid.Column="1" Classes="compact" Label="{DynamicResource S.Effect.Start}" Minimum="0" Maximum="1" Value="1" Step="0.01" />
+        <ui:SliderField x:Name="AlphaEndField" Grid.Column="2" Classes="compact" Label="{DynamicResource S.Effect.End}" Minimum="0" Maximum="1" Value="1" Step="0.01" />
       </Grid>
       <Grid ColumnDefinitions="Auto,*,*" ColumnSpacing="{StaticResource Ue.Gap.Line}">
         <TextBlock Classes="rowLabel" Text="{DynamicResource S.Effect.Dissolve}" />
-        <ui:SliderField x:Name="DissolveStartField" Grid.Column="1" Label="{DynamicResource S.Effect.Start}" Minimum="0" Maximum="1" Value="0" Step="0.01" />
-        <ui:SliderField x:Name="DissolveEndField" Grid.Column="2" Label="{DynamicResource S.Effect.End}" Minimum="0" Maximum="1" Value="0" Step="0.01" />
+        <ui:SliderField x:Name="DissolveStartField" Grid.Column="1" Classes="compact" Label="{DynamicResource S.Effect.Start}" Minimum="0" Maximum="1" Value="0" Step="0.01" />
+        <ui:SliderField x:Name="DissolveEndField" Grid.Column="2" Classes="compact" Label="{DynamicResource S.Effect.End}" Minimum="0" Maximum="1" Value="0" Step="0.01" />
       </Grid>
       <ui:SliderField x:Name="EdgeWidthField" Label="{DynamicResource S.Effect.EdgeWidth}" Minimum="0" Maximum="0.3" Value="0.08" Step="0.01" />
       <StackPanel Orientation="Horizontal" Spacing="{StaticResource Ue.Gap.Normal}">

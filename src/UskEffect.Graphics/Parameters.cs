@@ -7,6 +7,16 @@ public enum NoiseType : uint
     Perlin = 0,
     Worley = 1,
     Simplex = 2,
+
+    /// <summary>帯。周波数が帯の本数になる。</summary>
+    Stripe = 3,
+}
+
+public enum StripeDirection : uint
+{
+    Vertical = 0,
+    Horizontal = 1,
+    Diagonal = 2,
 }
 
 public enum FractalMode : uint
@@ -35,6 +45,8 @@ public enum SeamMode : uint
 public enum PreviewMode : uint
 {
     Rect = 0,
+
+    /// <summary>廃止。古いプロジェクトを読むためだけに残す (Tiling 3×3 の矩形として扱う)。</summary>
     Tile3x3 = 1,
     Polar = 2,
 
@@ -67,6 +79,14 @@ public sealed record NoiseSettings
     public FractalMode Fractal { get; init; } = FractalMode.Fbm;
     public WorleyMode Worley { get; init; } = WorleyMode.F1;
 
+    public StripeDirection StripeDirection { get; init; } = StripeDirection.Vertical;
+
+    /// <summary>帯の幅 (周期に対する割合)。</summary>
+    public float StripeWidth { get; init; } = 0.5f;
+
+    /// <summary>帯の縁のぼかし (周期に対する割合)。</summary>
+    public float StripeSoftness { get; init; } = 0.1f;
+
     /// <summary>ドメインワープ量 (UV 単位)。0 で無効。</summary>
     public float WarpStrength { get; init; }
 
@@ -83,17 +103,14 @@ public sealed record PreviewSettings
     public PolarSettings Polar { get; init; } = new();
     public HeatmapMode Heatmap { get; init; } = HeatmapMode.Value;
 
+    /// <summary>UV の繰り返し数とずらし量 (Unity のマテリアルの Tiling / Offset)。書き出す画像には影響しない。</summary>
+    public float TilingX { get; init; } = 1f;
+    public float TilingY { get; init; } = 1f;
+    public float OffsetX { get; init; }
+    public float OffsetY { get; init; }
+
     /// <summary>内部平均の何倍の差分から色を付けるか。</summary>
     public float HeatThreshold { get; init; } = 5f;
-}
-
-/// <summary>同時に描く描画先。中央のキャンバスと、右上の 3 つのプレビュー。</summary>
-public enum SurfaceSlot
-{
-    Main = 0,
-    Tile = 1,
-    Polar = 2,
-    Effect = 3,
 }
 
 // cbuffer NoiseParams (Shaders/Noise/PeriodicNoise.hlsl) と同じレイアウト
@@ -118,6 +135,11 @@ internal struct NoiseConstants
     public float Brightness;
     public uint Invert;
     public float Padding;
+
+    public uint StripeDirection;
+    public float StripeWidth;
+    public float StripeSoftness;
+    public float Padding2;
 }
 
 // cbuffer PreviewParams (Shaders/Preview.hlsl) と同じレイアウト
@@ -148,4 +170,19 @@ internal struct PreviewConstants
     public float StageG;
     public float StageB;
     public float ContentMargin;
+
+    public float ViewPanX;
+    public float ViewPanY;
+    public float ViewZoom;
+    public float ViewRotation;
+
+    public uint SourceIsColor;
+    public float Padding0;
+    public float Padding1;
+    public float Padding2;
+
+    public float TilingX;
+    public float TilingY;
+    public float OffsetX;
+    public float OffsetY;
 }

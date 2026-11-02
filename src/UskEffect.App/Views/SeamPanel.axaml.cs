@@ -26,7 +26,7 @@ public partial class SeamPanel : UserControl
     public float Threshold
     {
         get => (float)ThresholdField.Value;
-        set => ThresholdField.Value = value;
+        set => ThresholdField.SetValueExpanding(value);
     }
 
     public void ShowAnalysis(SeamAnalysis? seam, bool pending)

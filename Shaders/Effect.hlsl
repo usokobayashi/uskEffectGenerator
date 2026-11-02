@@ -16,7 +16,7 @@ cbuffer EffectParams : register(b0)
     float  Alpha;
 
     float3 EdgeColor;
-    uint   Flags;              // bit0: 極座標で貼る, bit1: テクスチャをアルファに使う, bit2: 円形ソフトマスク
+    uint   Flags;              // bit0: 極座標で貼る, bit1: テクスチャをアルファに使う, bit2: 円形ソフトマスク, bit3: カラー画像
 
     float  InnerRadius;
     float  OuterRadius;
@@ -25,10 +25,10 @@ cbuffer EffectParams : register(b0)
 
     uint   BackgroundMode;     // 0: チェッカー, 1: 黒, 2: 灰
     float  DissolveSoftness;
-    float2 _Padding;
+    float2 Tiling;             // UV の繰り返し数
 };
 
-Texture2D<float> Source : register(t0);
+Texture2D<float4> Source : register(t0);
 SamplerState WrapSampler : register(s0);
 
 static const float TwoPi = 6.28318530718;
@@ -107,14 +107,17 @@ float4 PSEffect(VSOutput input) : SV_Target
     }
 
     // 極座標の 0°/360° で atan2 が不連続なので LOD 0 固定
-    float n = Source.SampleLevel(WrapSampler, uv + ScrollOffset, 0);
+    // カラー画像は輝度 × アルファを値として扱い、色はエフェクトの色に掛ける
+    float4 texel = Source.SampleLevel(WrapSampler, uv * Tiling + ScrollOffset, 0);
+    bool isColor = (Flags & 8u) != 0;
+    float n = isColor ? dot(texel.rgb, float3(0.299, 0.587, 0.114)) * texel.a : texel.r;
 
     float visible = smoothstep(DissolveThreshold, DissolveThreshold + DissolveSoftness, n);
     float edge = DissolveEdge > 0.0 ? 1.0 - saturate((n - DissolveThreshold) / DissolveEdge) : 0.0;
 
     float textureAlpha = (Flags & 2u) != 0 ? n : 1.0;
     float alpha = Alpha * visible * mask * max(textureAlpha, edge);
-    float3 color = lerp(Color, EdgeColor, edge);
+    float3 color = lerp(isColor ? Color * texel.rgb : Color, EdgeColor, edge);
 
     return float4(color * alpha, alpha);
 }

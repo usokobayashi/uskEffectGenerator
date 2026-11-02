@@ -480,3 +480,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# ビルド先を変えたとき (実行中の exe がロックしているとき) の出力
+.artifacts/
