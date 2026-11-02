@@ -105,6 +105,14 @@
           <ComboBoxItem Content="XY" />
         </ComboBox>
 
+        <!-- シーム判定 (FR-04): 境界をまたぐ差分 ÷ 内部の差分。1 付近なら継ぎ目なし -->
+        <Border Margin="0,8,0,0" Padding="8,6" CornerRadius="4" Background="#1E1E1E">
+          <StackPanel>
+            <TextBlock x:Name="SeamVerdictText" FontWeight="Bold" TextWrapping="Wrap" Text="シーム判定: 解析中..." />
+            <TextBlock x:Name="SeamDetailText" FontFamily="Consolas,monospace" FontSize="11" Opacity="0.8" Margin="0,2,0,0" />
+          </StackPanel>
+        </Border>
+
         <TextBlock Text="プレビュー" FontWeight="Bold" FontSize="15" Margin="0,24,0,0" />
 
         <TextBlock Classes="label" Text="表示" />
@@ -112,10 +120,36 @@
           <ComboBoxItem Content="矩形" />
           <ComboBoxItem Content="3×3 タイル" />
           <ComboBoxItem Content="極座標" />
+          <ComboBoxItem Content="シーム検証（半タイルずらし）" />
         </ComboBox>
 
-        <TextBlock Classes="label" x:Name="InnerRadiusLabel" Text="極座標 内径" />
-        <Slider x:Name="InnerRadiusSlider" Minimum="0" Maximum="0.95" Value="0.3" />
+        <!-- 極座標 (FR-03) -->
+        <StackPanel x:Name="PolarPanel">
+          <TextBlock Classes="label" x:Name="InnerRadiusLabel" Text="内径" />
+          <Slider x:Name="InnerRadiusSlider" Minimum="0" Maximum="0.95" Value="0.3" />
+
+          <TextBlock Classes="label" x:Name="OuterRadiusLabel" Text="外径" />
+          <Slider x:Name="OuterRadiusSlider" Minimum="0.05" Maximum="1" Value="1" />
+
+          <TextBlock Classes="label" x:Name="RotationLabel" Text="回転" />
+          <Slider x:Name="RotationSlider" Minimum="0" Maximum="360" Value="0" />
+
+          <CheckBox x:Name="FlipAngularBox" Content="角度方向を反転（時計回り）" Margin="0,6,0,0" />
+          <CheckBox x:Name="FlipRadialBox" Content="内外を反転（外径側を v = 0）" />
+        </StackPanel>
+
+        <!-- シーム検証 (FR-04) -->
+        <StackPanel x:Name="SeamCheckPanel">
+          <TextBlock Classes="label" Text="ヒートマップ" />
+          <ComboBox x:Name="HeatmapBox" SelectedIndex="1">
+            <ComboBoxItem Content="なし" />
+            <ComboBoxItem Content="値の差分" />
+            <ComboBoxItem Content="勾配の差分（2 階差分）" />
+          </ComboBox>
+
+          <TextBlock Classes="label" x:Name="HeatThresholdLabel" Text="しきい値" />
+          <Slider x:Name="HeatThresholdSlider" Minimum="1.5" Maximum="10" Value="5" />
+        </StackPanel>
 
         <TextBlock Classes="label" x:Name="ScrollULabel" Text="UV スクロール U" />
         <Slider x:Name="ScrollUSlider" Minimum="-1" Maximum="1" Value="0" />

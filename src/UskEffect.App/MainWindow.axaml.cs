@@ -4,6 +4,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Threading;
 using UskEffect.App.Presets;
 using UskEffect.Graphics;
+using UskEffect.Graphics.Analysis;
 
 namespace UskEffect.App;
 
@@ -44,13 +45,15 @@ public partial class MainWindow : Window
         foreach (var slider in new RangeBase[]
                  {
                      FrequencySlider, OctavesSlider, PersistenceSlider, LacunaritySlider, WarpSlider, ContrastSlider,
-                     BrightnessSlider, InnerRadiusSlider, ScrollUSlider, ScrollVSlider,
+                     BrightnessSlider, InnerRadiusSlider, OuterRadiusSlider, RotationSlider, HeatThresholdSlider,
+                     ScrollUSlider, ScrollVSlider,
                  })
             slider.ValueChanged += (_, _) => ApplySettings();
-        foreach (var combo in new[] { NoiseTypeBox, WorleyModeBox, FractalBox, ResolutionBox, SeamBox, ViewModeBox })
+        foreach (var combo in new[] { NoiseTypeBox, WorleyModeBox, FractalBox, ResolutionBox, SeamBox, ViewModeBox, HeatmapBox })
             combo.SelectionChanged += (_, _) => ApplySettings();
         SeedBox.ValueChanged += (_, _) => ApplySettings();
-        InvertBox.IsCheckedChanged += (_, _) => ApplySettings();
+        foreach (var check in new[] { InvertBox, FlipAngularBox, FlipRadialBox })
+            check.IsCheckedChanged += (_, _) => ApplySettings();
         VSyncBox.IsCheckedChanged += (_, _) => ApplySettings();
         ReloadButton.Click += (_, _) => _engine.ReloadShaders();
 
@@ -83,7 +86,10 @@ public partial class MainWindow : Window
         FrequencyLabel.Text = $"Frequency: {frequency}";
         OctavesLabel.Text = $"Octaves: {octaves}";
         PersistenceLabel.Text = $"Persistence: {PersistenceSlider.Value:0.00}";
-        InnerRadiusLabel.Text = $"極座標 内径: {InnerRadiusSlider.Value:0.00}";
+        InnerRadiusLabel.Text = $"内径: {InnerRadiusSlider.Value:0.00}";
+        OuterRadiusLabel.Text = $"外径: {OuterRadiusSlider.Value:0.00}";
+        RotationLabel.Text = $"回転: {RotationSlider.Value:0}°";
+        HeatThresholdLabel.Text = $"しきい値: 内部平均の {HeatThresholdSlider.Value:0.0} 倍";
         ScrollULabel.Text = $"UV スクロール U: {ScrollUSlider.Value:0.00} /s";
         ScrollVLabel.Text = $"UV スクロール V: {ScrollVSlider.Value:0.00} /s";
         LacunarityLabel.Text = $"Lacunarity: {(int)LacunaritySlider.Value}";
@@ -94,12 +100,23 @@ public partial class MainWindow : Window
         var noise = ReadNoiseSettings();
         WorleyModeBox.IsEnabled = noise.Type == NoiseType.Worley;
         _engine.Noise = noise;
+        var mode = (PreviewMode)Math.Max(0, ViewModeBox.SelectedIndex);
+        PolarPanel.IsVisible = mode == PreviewMode.Polar;
+        SeamCheckPanel.IsVisible = mode == PreviewMode.SeamCheck;
+
+        // 外径は内径より外に保つ
+        float inner = (float)InnerRadiusSlider.Value;
+        float outer = Math.Max((float)OuterRadiusSlider.Value, inner + 0.01f);
+
         _engine.Preview = new PreviewSettings
         {
-            Mode = (PreviewMode)Math.Max(0, ViewModeBox.SelectedIndex),
-            InnerRadius = (float)InnerRadiusSlider.Value,
+            Mode = mode,
             ScrollSpeedU = (float)ScrollUSlider.Value,
             ScrollSpeedV = (float)ScrollVSlider.Value,
+            Polar = new PolarSettings(inner, outer, (float)RotationSlider.Value,
+                FlipAngularBox.IsChecked == true, FlipRadialBox.IsChecked == true),
+            Heatmap = (HeatmapMode)Math.Max(0, HeatmapBox.SelectedIndex),
+            HeatThreshold = (float)HeatThresholdSlider.Value,
         };
         _engine.VSync = VSyncBox.IsChecked == true;
     }
@@ -271,10 +288,31 @@ public partial class MainWindow : Window
             ErrorPanel.IsVisible = _shownErrors is not null;
         }
 
+        ShowSeamAnalysis(stats.Seam, stats.SeamAnalysisPending);
+
         StatusText.Text =
             $"{stats.AdapterName}  |  Texture {stats.TextureWidth}×{stats.TextureHeight}  |  " +
             $"Viewport {stats.ViewportWidth}×{stats.ViewportHeight}  |  " +
             $"Noise GPU {stats.ComputeMilliseconds:0.000} ms  |  Frame GPU {stats.FrameMilliseconds:0.000} ms  |  {fps:0.0} fps";
+    }
+
+    private void ShowSeamAnalysis(SeamAnalysis? seam, bool pending)
+    {
+        if (seam is null)
+        {
+            SeamVerdictText.Text = "シーム判定: 解析中...";
+            SeamDetailText.Text = "";
+            return;
+        }
+
+        string Verdict(SeamReport r) => r.IsSeamless ? "継ぎ目なし" : "継ぎ目あり";
+        bool all = seam.Horizontal.IsSeamless && seam.Vertical.IsSeamless;
+        SeamVerdictText.Text = $"シーム判定: 左右 {Verdict(seam.Horizontal)} / 上下 {Verdict(seam.Vertical)}" + (pending ? "（更新中）" : "");
+        SeamVerdictText.Foreground = all ? Avalonia.Media.Brushes.LightGreen : Avalonia.Media.Brushes.Orange;
+        SeamDetailText.Text =
+            $"左右  値 {seam.Horizontal.ValueRatio,5:0.00}  勾配 {seam.Horizontal.GradientRatio,5:0.00}\n" +
+            $"上下  値 {seam.Vertical.ValueRatio,5:0.00}  勾配 {seam.Vertical.GradientRatio,5:0.00}\n" +
+            $"基準  値 < {SeamReport.SeamlessValueLimit:0.0}  勾配 < {SeamReport.SeamlessGradientLimit:0.0}";
     }
 
     // 開発中はリポジトリ直下の Shaders/ を直接監視してホットリロードする

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using UskEffect.Graphics.Analysis;
 
 namespace UskEffect.Graphics;
 
@@ -10,10 +11,13 @@ public readonly record struct RenderStats(
     int ViewportHeight,
     double ComputeMilliseconds,
     double FrameMilliseconds,
-    string? ShaderErrors);
+    string? ShaderErrors,
+    SeamAnalysis? Seam,
+    bool SeamAnalysisPending);
 
 /// <summary>
-/// Phase 1 検証用の描画エンジン。ノイズ生成 → プレビュー描画 → Present をレンダースレッドで回す。
+/// 描画エンジン。ノイズ生成 → プレビュー描画 → Present をレンダースレッドで回す。
+/// ノイズを作り直したら、操作が落ち着いてから GPU から読み戻して継ぎ目を解析する (FR-04)。
 /// D3D11 の即時コンテキストはスレッドセーフでないため、D3D を触る公開メソッドは _sync で直列化する。
 /// 設定はイミュータブルな record の差し替えで受け取るので、UI スレッドからロックなしで設定できる。
 /// HLSL ファイルの変更を監視し、次フレームで再コンパイルする。
@@ -37,6 +41,13 @@ public sealed class RenderEngine : IDisposable
     private volatile bool _shadersDirty = true;
     private string? _noiseErrors;
     private string? _previewErrors;
+
+    // スライダー操作中に毎フレーム読み戻すと描画が詰まるので、最後の生成から少し待って 1 回だけ解析する
+    private static readonly TimeSpan AnalysisDelay = TimeSpan.FromMilliseconds(150);
+    private bool _analysisPending;
+    private TimeSpan _lastNoiseGenerated;
+    private Task? _analysisTask;
+    private volatile SeamAnalysis? _seamAnalysis;
 
     public volatile PreviewSettings Preview = new();
     public volatile bool VSync = true;
@@ -139,11 +150,14 @@ public sealed class RenderEngine : IDisposable
                 _noise.Generate(_noiseSettings);
                 _timer.MarkComputeDone();
                 _noiseDirty = false;
+                _analysisPending = true;
+                _lastNoiseGenerated = _clock.Elapsed;
             }
             _preview.Render(_target, _noise.ShaderResourceView, _noise.Width, _noise.Height, Preview,
-                (float)_clock.Elapsed.TotalSeconds);
+                (float)_clock.Elapsed.TotalSeconds, _seamAnalysis);
             _timer.EndFrame();
             _target.Present(VSync);
+            StartSeamAnalysisIfIdle();
         }
 
         string? errors = (_noiseErrors, _previewErrors) switch
@@ -153,13 +167,30 @@ public sealed class RenderEngine : IDisposable
         };
         stats = new RenderStats(_gpu.AdapterName, _noise.Width, _noise.Height,
             _target?.Width ?? 0, _target?.Height ?? 0,
-            _timer.ComputeMilliseconds, _timer.FrameMilliseconds, errors);
+            _timer.ComputeMilliseconds, _timer.FrameMilliseconds, errors,
+            _seamAnalysis, _analysisPending || _analysisTask is { IsCompleted: false });
         return rendered;
+    }
+
+    private void StartSeamAnalysisIfIdle()
+    {
+        if (!_analysisPending || _clock.Elapsed - _lastNoiseGenerated < AnalysisDelay)
+            return;
+        if (_analysisTask is { IsCompleted: false })
+            return; // 前の解析が終わってから。終わった時点でまだ pending なら次フレームで再解析する
+
+        _analysisPending = false;
+        float[] pixels = _noise.ReadPixels();
+        int width = _noise.Width, height = _noise.Height;
+        if (pixels.Length == 0)
+            return;
+        _analysisTask = Task.Run(() => _seamAnalysis = SeamAnalyzer.Analyze(pixels, width, height));
     }
 
     public void Dispose()
     {
         _watcher?.Dispose();
+        _analysisTask?.Wait();
         DetachWindow();
         lock (_sync)
         {

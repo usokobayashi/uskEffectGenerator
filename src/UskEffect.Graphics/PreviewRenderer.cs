@@ -1,6 +1,7 @@
 using Vortice.Direct3D;
 using Vortice.Direct3D11;
 using Vortice.Mathematics;
+using UskEffect.Graphics.Analysis;
 
 namespace UskEffect.Graphics;
 
@@ -38,7 +39,7 @@ public sealed class PreviewRenderer : IDisposable
     }
 
     public void Render(SwapChainTarget target, ID3D11ShaderResourceView? source, int sourceWidth, int sourceHeight,
-        PreviewSettings settings, float timeSeconds)
+        PreviewSettings settings, float timeSeconds, SeamAnalysis? seam)
     {
         var context = _gpu.Context;
         context.OMSetRenderTargets(target.RenderTargetView);
@@ -57,8 +58,15 @@ public sealed class PreviewRenderer : IDisposable
             Time = timeSeconds,
             ScrollSpeedU = settings.ScrollSpeedU,
             ScrollSpeedV = settings.ScrollSpeedV,
-            InnerRadius = settings.InnerRadius,
-            OuterRadius = settings.OuterRadius,
+            InnerRadius = settings.Polar.InnerRadius,
+            OuterRadius = settings.Polar.OuterRadius,
+            RotationRadians = settings.Polar.RotationDegrees * (MathF.PI / 180f),
+            PolarFlags = (settings.Polar.FlipAngular ? 1u : 0u) | (settings.Polar.FlipRadial ? 2u : 0u),
+            // 解析前はヒートマップを出さない
+            HeatmapMode = seam is null ? 0u : (uint)settings.Heatmap,
+            MeanValueDiff = (float)(seam?.MeanValueDiff ?? 1.0),
+            MeanGradientDiff = (float)(seam?.MeanGradientDiff ?? 1.0),
+            HeatThreshold = Math.Max(1f, settings.HeatThreshold),
         };
         context.UpdateSubresource(constants, _constantBuffer);
 

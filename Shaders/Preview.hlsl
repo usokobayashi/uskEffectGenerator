@@ -1,16 +1,24 @@
-// プレビュー描画 (Phase 1 検証用): 矩形 / 3x3 タイル / 極座標
+// プレビュー描画: 矩形 / 3x3 タイル / 極座標 / シーム検証
 // 同じソーステクスチャを Wrap サンプラーで読み、UV スクロールでアニメーションさせる。
 
 cbuffer PreviewParams : register(b0)
 {
     float2 ViewportSize;
     float2 TextureSize;
-    uint   ViewMode;     // 0: Rect, 1: Tile3x3, 2: Polar
+
+    uint   ViewMode;          // 0: Rect, 1: Tile3x3, 2: Polar, 3: SeamCheck
     float  Time;
-    float2 ScrollSpeed;  // UV / 秒
-    float  InnerRadius;  // 0..1
-    float  OuterRadius;  // 0..1
-    float2 _Padding;
+    float2 ScrollSpeed;       // UV / 秒
+
+    float  InnerRadius;       // 外接円を 1 とした比率
+    float  OuterRadius;
+    float  Rotation;          // ラジアン。表示を反時計回りに回す
+    uint   PolarFlags;        // bit0: 角度方向反転, bit1: 内外反転
+
+    uint   HeatmapMode;       // 0: Off, 1: 値差分, 2: 勾配差分
+    float  MeanValueDiff;     // 内部の隣接画素差の平均 (CPU の継ぎ目解析から)
+    float  MeanGradientDiff;  // 内部の 2 階差分の平均
+    float  HeatThreshold;     // 平均の何倍から色を付けるか
 };
 
 Texture2D<float> Source : register(t0);
@@ -41,6 +49,47 @@ float3 Background(float2 pixel)
     return lerp(0.13, 0.17, checker).xxx;
 }
 
+// 極座標キャンバス → UV。規約は src/UskEffect.Graphics/PolarMapping.cs と同じ。
+// c は中心原点・y 上向き・外接円半径 1。リング外なら false
+bool PolarToUv(float2 c, out float2 uv)
+{
+    float r = length(c);
+    uv = 0;
+    if (r < InnerRadius || r > OuterRadius)
+        return false;
+
+    float u = frac((atan2(c.y, c.x) - Rotation) / TwoPi);
+    float v = (r - InnerRadius) / max(OuterRadius - InnerRadius, 1e-5);
+    if ((PolarFlags & 1u) != 0)
+        u = frac(1.0 - u);
+    if ((PolarFlags & 2u) != 0)
+        v = 1.0 - v;
+    uv = float2(u, v);
+    return true;
+}
+
+float LoadWrapped(int2 texel)
+{
+    int2 size = (int2)TextureSize;
+    return Source.Load(int3((texel % size + size) % size, 0));
+}
+
+// 周期境界を含めた局所差分を内部平均で割った比。継ぎ目があると境界の行・列で大きくなる
+float SeamHeat(float2 uv)
+{
+    int2 p = (int2)floor(frac(uv) * TextureSize);
+    float c = LoadWrapped(p);
+    float l = LoadWrapped(p - int2(1, 0));
+    float d = LoadWrapped(p - int2(0, 1));
+
+    if (HeatmapMode == 1)
+        return max(abs(c - l), abs(c - d)) / max(MeanValueDiff, 1e-6);
+
+    float r = LoadWrapped(p + int2(1, 0));
+    float u = LoadWrapped(p + int2(0, 1));
+    return max(abs(r - 2.0 * c + l), abs(u - 2.0 * c + d)) / max(MeanGradientDiff, 1e-6);
+}
+
 float4 PSMain(VSOutput input) : SV_Target
 {
     float2 pixel = input.ScreenUV * ViewportSize;
@@ -54,20 +103,33 @@ float4 PSMain(VSOutput input) : SV_Target
 
     if (ViewMode == 2)
     {
-        // 3.1 座標変換: theta=0 を右方向、反時計回りを +u、内径側を v=0 とする
         float2 c = local * 2.0 - 1.0;
         c.y = -c.y;
-        float r = length(c);
-        if (r < InnerRadius || r > OuterRadius)
+        if (!PolarToUv(c, uv))
             return float4(Background(pixel), 1);
-        float u = frac(atan2(c.y, c.x) / TwoPi);
-        float v = (r - InnerRadius) / max(OuterRadius - InnerRadius, 1e-5);
-        uv = float2(u, v) + scroll;
+        uv += scroll;
     }
     else
     {
         if (any(local < 0.0) || any(local > 1.0))
             return float4(Background(pixel), 1);
+
+        if (ViewMode == 3)
+        {
+            // 半タイルずらして、左右・上下の端を中央の十字に持ってくる
+            uv = local + 0.5;
+            float n = Source.SampleLevel(WrapSampler, uv, 0);
+            float3 color = n.xxx * 0.75;
+            if (HeatmapMode != 0)
+            {
+                float heat = SeamHeat(uv);
+                float alpha = saturate((heat - HeatThreshold) / HeatThreshold);
+                float3 heatColor = lerp(float3(1.0, 0.85, 0.1), float3(1.0, 0.1, 0.05), alpha);
+                color = lerp(color, heatColor, alpha * 0.9);
+            }
+            return float4(color, 1);
+        }
+
         uv = local * tiles + scroll;
     }
 

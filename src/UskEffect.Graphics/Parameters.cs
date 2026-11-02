@@ -37,6 +37,16 @@ public enum PreviewMode : uint
     Rect = 0,
     Tile3x3 = 1,
     Polar = 2,
+
+    /// <summary>半タイルずらして継ぎ目を中央に集め、差分をヒートマップで重ねる (FR-04)。</summary>
+    SeamCheck = 3,
+}
+
+public enum HeatmapMode : uint
+{
+    Off = 0,
+    Value = 1,
+    Gradient = 2,
 }
 
 public sealed record NoiseSettings
@@ -67,8 +77,11 @@ public sealed record PreviewSettings
     public PreviewMode Mode { get; init; } = PreviewMode.Rect;
     public float ScrollSpeedU { get; init; }
     public float ScrollSpeedV { get; init; }
-    public float InnerRadius { get; init; } = 0.3f;
-    public float OuterRadius { get; init; } = 1.0f;
+    public PolarSettings Polar { get; init; } = new();
+    public HeatmapMode Heatmap { get; init; } = HeatmapMode.Value;
+
+    /// <summary>内部平均の何倍の差分から色を付けるか。</summary>
+    public float HeatThreshold { get; init; } = 5f;
 }
 
 // cbuffer NoiseParams (Shaders/Noise/PeriodicNoise.hlsl) と同じレイアウト
@@ -103,12 +116,19 @@ internal struct PreviewConstants
     public float ViewportHeight;
     public float TextureWidth;
     public float TextureHeight;
+
     public uint ViewMode;
     public float Time;
     public float ScrollSpeedU;
     public float ScrollSpeedV;
+
     public float InnerRadius;
     public float OuterRadius;
-    public float Padding0;
-    public float Padding1;
+    public float RotationRadians;
+    public uint PolarFlags; // bit0: 角度方向反転, bit1: 内外反転
+
+    public uint HeatmapMode;
+    public float MeanValueDiff;
+    public float MeanGradientDiff;
+    public float HeatThreshold;
 }

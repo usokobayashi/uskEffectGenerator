@@ -6,10 +6,6 @@ public sealed class PeriodicNoiseTests(NoiseFixture fixture) : IClassFixture<Noi
 {
     private const int Size = 256;
 
-    // 継ぎ目なしと判定する上限。内部の差分と同程度 (比 ≈ 1) なら継ぎ目はない
-    private const double SeamlessValueLimit = 1.5;
-    private const double SeamlessGradientLimit = 2.0;
-
     // 継ぎ目ありと判定する下限。メトリクスが継ぎ目を検出できることの確認に使う
     private const double SeamDetectedLimit = 3.0;
 
@@ -39,8 +35,8 @@ public sealed class PeriodicNoiseTests(NoiseFixture fixture) : IClassFixture<Noi
     {
         var pixels = fixture.Generate(Base(type, fractal) with { Seam = SeamMode.XY });
 
-        AssertSeamless(SeamMetrics.Horizontal(pixels, Size, Size), "X");
-        AssertSeamless(SeamMetrics.Vertical(pixels, Size, Size), "Y");
+        AssertSeamless(SeamAnalyzer.Horizontal(pixels, Size, Size), "X");
+        AssertSeamless(SeamAnalyzer.Vertical(pixels, Size, Size), "Y");
     }
 
     [Theory]
@@ -51,8 +47,8 @@ public sealed class PeriodicNoiseTests(NoiseFixture fixture) : IClassFixture<Noi
     {
         var pixels = fixture.Generate(Base(type) with { Seam = SeamMode.X });
 
-        AssertSeamless(SeamMetrics.Horizontal(pixels, Size, Size), "X");
-        AssertSeamDetected(SeamMetrics.Vertical(pixels, Size, Size), "Y");
+        AssertSeamless(SeamAnalyzer.Horizontal(pixels, Size, Size), "X");
+        AssertSeamDetected(SeamAnalyzer.Vertical(pixels, Size, Size), "Y");
     }
 
     [Theory]
@@ -63,8 +59,8 @@ public sealed class PeriodicNoiseTests(NoiseFixture fixture) : IClassFixture<Noi
     {
         var pixels = fixture.Generate(Base(type) with { Seam = SeamMode.Off });
 
-        AssertSeamDetected(SeamMetrics.Horizontal(pixels, Size, Size), "X");
-        AssertSeamDetected(SeamMetrics.Vertical(pixels, Size, Size), "Y");
+        AssertSeamDetected(SeamAnalyzer.Horizontal(pixels, Size, Size), "X");
+        AssertSeamDetected(SeamAnalyzer.Vertical(pixels, Size, Size), "Y");
     }
 
     [Theory]
@@ -75,8 +71,8 @@ public sealed class PeriodicNoiseTests(NoiseFixture fixture) : IClassFixture<Noi
     {
         var pixels = fixture.Generate(Base(NoiseType.Worley) with { Worley = mode, Seam = SeamMode.XY });
 
-        AssertSeamless(SeamMetrics.Horizontal(pixels, Size, Size), "X");
-        AssertSeamless(SeamMetrics.Vertical(pixels, Size, Size), "Y");
+        AssertSeamless(SeamAnalyzer.Horizontal(pixels, Size, Size), "X");
+        AssertSeamless(SeamAnalyzer.Vertical(pixels, Size, Size), "Y");
     }
 
     // 1 オクターブなら、隣接画素の差は勾配 × 画素幅で抑えられる。セル探索範囲が足りないと値が飛ぶ
@@ -107,8 +103,8 @@ public sealed class PeriodicNoiseTests(NoiseFixture fixture) : IClassFixture<Noi
     {
         var pixels = fixture.Generate(Base(type) with { Lacunarity = lacunarity, Octaves = 3, Seam = SeamMode.XY });
 
-        AssertSeamless(SeamMetrics.Horizontal(pixels, Size, Size), "X");
-        AssertSeamless(SeamMetrics.Vertical(pixels, Size, Size), "Y");
+        AssertSeamless(SeamAnalyzer.Horizontal(pixels, Size, Size), "X");
+        AssertSeamless(SeamAnalyzer.Vertical(pixels, Size, Size), "Y");
     }
 
     [Theory]
@@ -119,8 +115,8 @@ public sealed class PeriodicNoiseTests(NoiseFixture fixture) : IClassFixture<Noi
     {
         var pixels = fixture.Generate(Base(type) with { WarpStrength = 0.15f, Seam = SeamMode.XY });
 
-        AssertSeamless(SeamMetrics.Horizontal(pixels, Size, Size), "X");
-        AssertSeamless(SeamMetrics.Vertical(pixels, Size, Size), "Y");
+        AssertSeamless(SeamAnalyzer.Horizontal(pixels, Size, Size), "X");
+        AssertSeamless(SeamAnalyzer.Vertical(pixels, Size, Size), "Y");
     }
 
     [Theory]
@@ -158,8 +154,7 @@ public sealed class PeriodicNoiseTests(NoiseFixture fixture) : IClassFixture<Noi
 
     private static void AssertSeamless(SeamReport report, string axis)
     {
-        Assert.True(report.ValueRatio < SeamlessValueLimit && report.GradientRatio < SeamlessGradientLimit,
-            $"{axis} 方向に継ぎ目がある ({report})");
+        Assert.True(report.IsSeamless, $"{axis} 方向に継ぎ目がある ({report})");
     }
 
     private static void AssertSeamDetected(SeamReport report, string axis)
