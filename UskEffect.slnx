@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/UskEffect.App/UskEffect.App.csproj" />
+    <Project Path="src/UskEffect.Graphics/UskEffect.Graphics.csproj" />
+  </Folder>
+</Solution>
