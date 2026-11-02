@@ -17,6 +17,21 @@
   </Window.Styles>
 
   <DockPanel>
+    <!-- 上部: メニュー・ファイル操作 (要件 §6) -->
+    <Menu DockPanel.Dock="Top" Background="#2D2D30">
+      <MenuItem Header="ファイル(_F)">
+        <MenuItem x:Name="NewMenuItem" Header="新規(_N)" InputGesture="Ctrl+N" HotKey="Ctrl+N" />
+        <MenuItem x:Name="OpenMenuItem" Header="開く(_O)..." InputGesture="Ctrl+O" HotKey="Ctrl+O" />
+        <Separator />
+        <MenuItem x:Name="SaveMenuItem" Header="保存(_S)" InputGesture="Ctrl+S" HotKey="Ctrl+S" />
+        <MenuItem x:Name="SaveAsMenuItem" Header="名前を付けて保存(_A)..." InputGesture="Ctrl+Shift+S" HotKey="Ctrl+Shift+S" />
+        <Separator />
+        <MenuItem x:Name="ExportMenuItem" Header="画像を書き出し(_E)..." InputGesture="Ctrl+E" HotKey="Ctrl+E" />
+        <Separator />
+        <MenuItem x:Name="ExitMenuItem" Header="終了(_X)" />
+      </MenuItem>
+    </Menu>
+
     <!-- 下部: GPU 状態・解像度 -->
     <Border DockPanel.Dock="Bottom" Padding="10,4" Background="#1E1E1E">
       <TextBlock x:Name="StatusText" FontFamily="Consolas,monospace" FontSize="12" Text="GPU 初期化中..." />
@@ -173,6 +188,15 @@
 
         <TextBlock Classes="label" x:Name="ScrollVLabel" Text="UV スクロール V" />
         <Slider x:Name="ScrollVSlider" Minimum="-1" Maximum="1" Value="0" />
+
+        <TextBlock Text="書き出し" FontWeight="Bold" FontSize="15" Margin="0,24,0,0" />
+        <TextBlock Classes="label" Text="チャンネル（ファイル → 画像を書き出し）" />
+        <ComboBox x:Name="ExportChannelsBox" SelectedIndex="0">
+          <ComboBoxItem Content="グレースケール 8bit" />
+          <ComboBoxItem Content="グレースケール 16bit（PNG のみ）" />
+          <ComboBoxItem Content="RGBA（RGB = 値、A = 255）" />
+          <ComboBoxItem Content="RGBA（RGB = 白、A = 値）" />
+        </ComboBox>
 
         <CheckBox x:Name="VSyncBox" Content="VSync" IsChecked="True" Margin="0,12,0,0" />
 

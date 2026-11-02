@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\UskEffect.Graphics\UskEffect.Graphics.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -28,6 +28,8 @@ public sealed class EffectPanel : UserControl
     private readonly ColorPicker _colorStart = Picker(Colors.White);
     private readonly ColorPicker _colorEnd = Picker(Colors.White);
 
+    private bool _suppress;
+
     public event Action? Changed;
 
     public EffectPanel()
@@ -101,8 +103,37 @@ public sealed class EffectPanel : UserControl
         Color = new Animated<Vector3>(ToVector(_colorStart.Color), ToVector(_colorEnd.Color)),
     };
 
+    /// <summary>設定をコントロールに反映する (プロジェクト読込用)。Changed は 1 回だけ発生する。</summary>
+    public void Write(EffectSettings e)
+    {
+        _suppress = true;
+        try
+        {
+            _mapping.SelectedIndex = (int)e.Mapping;
+            _blend.SelectedIndex = e.Blend == EffectBlend.Alpha ? 1 : 0;
+            _background.SelectedIndex = (int)e.Background;
+            _softMask.IsChecked = e.Mask == EffectMask.SoftCircle;
+            _textureAsAlpha.IsChecked = e.TextureAsAlpha;
+            _rotation.Write(e.Rotation);
+            _scale.Write(e.Scale);
+            _dissolve.Write(e.Dissolve);
+            _alpha.Write(e.Alpha);
+            _edgeWidth.Value = e.DissolveEdgeWidth;
+            _edgeColor.Color = ToColor(e.DissolveEdgeColor);
+            _colorStart.Color = ToColor(e.Color.Start);
+            _colorEnd.Color = ToColor(e.Color.End);
+        }
+        finally
+        {
+            _suppress = false;
+        }
+        RaiseChanged();
+    }
+
     private void RaiseChanged()
     {
+        if (_suppress)
+            return;
         UpdateLabels();
         Changed?.Invoke();
     }
@@ -115,6 +146,11 @@ public sealed class EffectPanel : UserControl
     }
 
     private static Vector3 ToVector(Color c) => new(c.R / 255f, c.G / 255f, c.B / 255f);
+
+    private static Color ToColor(Vector3 v) => Color.FromRgb(
+        (byte)MathF.Round(Math.Clamp(v.X, 0f, 1f) * 255f),
+        (byte)MathF.Round(Math.Clamp(v.Y, 0f, 1f) * 255f),
+        (byte)MathF.Round(Math.Clamp(v.Z, 0f, 1f) * 255f));
 
     private static ComboBox Combo(params string[] items)
     {
@@ -169,6 +205,12 @@ public sealed class EffectPanel : UserControl
         public Control View { get; }
 
         public Animated<float> Read() => new((float)_start.Value, (float)_end.Value);
+
+        public void Write(Animated<float> value)
+        {
+            _start.Value = value.Start;
+            _end.Value = value.End;
+        }
 
         public void UpdateLabel() =>
             _label.Text = $"{_title}: {_start.Value.ToString(_format)} → {_end.Value.ToString(_format)}";

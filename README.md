@@ -11,6 +11,7 @@
 | 2 | ノイズ生成・調整 | 完了 |
 | 3 | シームレス生成・極座標検証 | 完了 |
 | 4 | エフェクトプレビュー・タイムライン | 完了 |
+| 5 | 画像出力・プロジェクト保存 | 完了 |
 
 | 項目 | 内容 |
 |---|---|
@@ -26,6 +27,9 @@
 | 極座標 | 内径・外径 (内径 0 で円盤)、回転、角度方向・内外の反転。変換規約は `PolarMapping` に一本化 (+x が 0°、反時計回りに u 増加、内径で v = 0) |
 | シーム検証 | 境界をまたぐ値差分・勾配 (2 階) 差分を境界に隣接する差分と比べて判定し、数値と判定を常時表示。半タイルずらし表示に、内部平均比のヒートマップを重ねる |
 | エフェクト | 再生・一時停止・停止・スクラブ・ループ・長さ (下部タイムライン)。UV 移動、回転・拡縮・アルファ・色・ディゾルブを開始値→終了値で補間。ディゾルブの発光帯 (幅・色)、Alpha / Additive 合成、矩形 / 極座標で貼る、背景 (チェッカー・黒・灰)、円形ソフトマスク |
+| 画像出力 | PNG / TGA。グレースケール 8bit・16bit (PNG のみ)・RGBA (RGB = 値)・RGBA (白 + A = 値)。外部ライブラリを使わない自前エンコーダー (PNG の圧縮は .NET 標準の ZLibStream) |
+| プロジェクト | `.uskfx` (ZIP 内の project.json、formatVersion 付き)。ノイズ・プレビュー・エフェクト・タイムライン・書き出し設定を保存。レイヤー画像は Phase 6 以降で同じ ZIP に追加する |
+| メニュー | 新規 (Ctrl+N)・開く (Ctrl+O)・保存 (Ctrl+S)・名前を付けて保存 (Ctrl+Shift+S)・画像を書き出し (Ctrl+E)。未保存の変更はタイトルに * を付け、閉じる・新規・開くの前に確認する |
 | 計測 | タイムスタンプクエリによる GPU 時間、FPS |
 
 ### ビルド・実行・テスト
@@ -53,7 +57,9 @@ dotnet restore --disable-parallel
 - 3×3 タイルでシーム XY は継ぎ目なし、OFF は継ぎ目が出る。極座標で 0°/360° が連続
 - テスト 54 件: 周期性 (全ノイズ種別 × フラクタル、X のみ、Lacunarity 3/4、ドメインワープ、Worley 内部の不連続、値域、Seed の決定性)、継ぎ目解析 (正弦波・ランプ・長方形・端での折れ)、極座標変換 (往復、規約、回転、0°/360° の連続、リング外)
 - シーム検証ビュー: シーム X のみで上下の継ぎ目が中央の線として出る (比 値 19.6 / 勾配 68.4)。XY では比 0.6〜1.3
-- エフェクト再生中も 144fps。テスト 73 件 (Phase 4 でタイムライン・補間・GPU 描画結果の画素検証を追加)
+- エフェクト再生中も 144fps
+- テスト 88 件。Phase 5 で PNG を Windows 標準のデコーダー (WIC) で読み戻す検証、TGA のヘッダー検証、プロジェクトの保存→読込で全項目が一致すること、壊れたファイル・新しい形式の拒否を追加
+- 実機: メニューから PNG 書き出し、Ctrl+S で保存、Ctrl+N の未保存確認、Ctrl+O で開いて設定が戻ること、閉じるときの確認 (二重の閉じる要求でもダイアログは 1 つ) を確認
 
 ### 構成
 
@@ -64,8 +70,10 @@ Shaders/Effect.hlsl               エフェクトプレビュー (背景 + 乗�
 src/UskEffect.Graphics/           D3D11 デバイス・スワップチェーン・ノイズ生成・プレビュー・GPU タイマー、PolarMapping
 src/UskEffect.Graphics/Analysis/  継ぎ目解析 (SeamAnalyzer)
 src/UskEffect.Graphics/Effects/   エフェクト設定・時間補間・タイムライン・描画
+src/UskEffect.Core/Export/        PNG / TGA エンコーダーとテクスチャの書き出し
+src/UskEffect.Core/Project/       プロジェクトファイル (.uskfx)
 src/UskEffect.App/                Avalonia UI、D3DHost (NativeControlHost)、プリセット
-tests/UskEffect.Tests/            周期性・継ぎ目解析・極座標変換・エフェクトのテスト (xunit v3 / Microsoft.Testing.Platform)
+tests/UskEffect.Tests/            周期性・継ぎ目解析・極座標変換・エフェクト・書き出し・プロジェクトのテスト (xunit v3 / Microsoft.Testing.Platform)
 ```
 
 ### 既知の制約

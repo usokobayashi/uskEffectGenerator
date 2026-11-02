@@ -10,10 +10,13 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
     <PackageReference Include="xunit.v3" Version="4.0.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1" />
+    <!-- 書き出した PNG を Windows 標準のデコーダー (WIC) で読み戻して検証する -->
+    <PackageReference Include="Vortice.Direct2D1" Version="3.8.3" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\UskEffect.Graphics\UskEffect.Graphics.csproj" />
+    <ProjectReference Include="..\..\src\UskEffect.Core\UskEffect.Core.csproj" />
   </ItemGroup>
 
 </Project>

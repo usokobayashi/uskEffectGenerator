@@ -196,6 +196,36 @@ public sealed class RenderEngine : IDisposable
         return rendered;
     }
 
+    /// <summary>
+    /// 現在の設定で生成したノイズを読み戻す (画像出力用)。UI スレッドから呼んでよい。
+    /// 設定変更がまだ描画に反映されていなくても、ここで生成し直してから読む。
+    /// </summary>
+    public (float[] Pixels, int Width, int Height) ReadNoisePixels()
+    {
+        lock (_sync)
+        {
+            if (_shadersDirty)
+            {
+                _shadersDirty = false;
+                _noiseErrors = _noise.LoadShader(_noiseShaderPath);
+                _previewErrors = _preview.LoadShader(_previewShaderPath);
+                _effectErrors = _effect.LoadShader(_effectShaderPath);
+                _noiseDirty = true;
+            }
+            if (_noiseErrors is not null)
+                throw new InvalidOperationException($"ノイズのシェーダーにエラーがあるため書き出せません。{Environment.NewLine}{_noiseErrors}");
+
+            if (_noiseDirty || _noise.ShaderResourceView is null)
+            {
+                _noise.Generate(_noiseSettings);
+                _noiseDirty = false;
+                _analysisPending = true;
+                _lastNoiseGenerated = _clock.Elapsed;
+            }
+            return (_noise.ReadPixels(), _noise.Width, _noise.Height);
+        }
+    }
+
     private void StartSeamAnalysisIfIdle()
     {
         if (!_analysisPending || _clock.Elapsed - _lastNoiseGenerated < AnalysisDelay)

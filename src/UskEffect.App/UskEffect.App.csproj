@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\UskEffect.Graphics\UskEffect.Graphics.csproj" />
+    <ProjectReference Include="..\UskEffect.Core\UskEffect.Core.csproj" />
   </ItemGroup>
 
   <!-- HLSL は実行時コンパイル。開発時はリポジトリ直下の Shaders/ を直接監視し、無ければ出力先のコピーを使う。 -->

@@ -57,7 +57,8 @@ public partial class MainWindow : Window
         SeedBox.ValueChanged += (_, _) => ApplySettings();
         foreach (var check in new[] { InvertBox, FlipAngularBox, FlipRadialBox })
             check.IsCheckedChanged += (_, _) => ApplySettings();
-        VSyncBox.IsCheckedChanged += (_, _) => ApplySettings();
+        // VSync はプロジェクトに含めない表示設定なので、未保存の変更として扱わない
+        VSyncBox.IsCheckedChanged += (_, _) => _engine.VSync = VSyncBox.IsChecked == true;
         ReloadButton.Click += (_, _) => _engine.ReloadShaders();
 
         EffectSettingsPanel.Changed += ApplySettings;
@@ -69,6 +70,7 @@ public partial class MainWindow : Window
         RefreshPresetList(null);
 
         ApplySettings();
+        SetUpProjectCommands();
         Opened += (_, _) =>
         {
             _renderThread = new Thread(RenderLoop) { IsBackground = true, Name = "uskEffect Render" };
@@ -130,14 +132,23 @@ public partial class MainWindow : Window
         };
         _engine.Effect = EffectSettingsPanel.Read();
         _engine.VSync = VSyncBox.IsChecked == true;
+        MarkDirty();
     }
 
     private void SetUpTimeline(EffectTimeline timeline)
     {
         PlayButton.Click += (_, _) => timeline.TogglePlay();
         StopButton.Click += (_, _) => timeline.Stop();
-        LoopBox.IsCheckedChanged += (_, _) => timeline.Loop = LoopBox.IsChecked == true;
-        DurationBox.ValueChanged += (_, _) => timeline.Duration = (double)(DurationBox.Value ?? 2m);
+        LoopBox.IsCheckedChanged += (_, _) =>
+        {
+            timeline.Loop = LoopBox.IsChecked == true;
+            MarkDirty();
+        };
+        DurationBox.ValueChanged += (_, _) =>
+        {
+            timeline.Duration = (double)(DurationBox.Value ?? 2m);
+            MarkDirty();
+        };
         TimelineSlider.ValueChanged += (_, e) =>
         {
             if (!_updatingTimeline)
@@ -182,31 +193,36 @@ public partial class MainWindow : Window
         Invert = InvertBox.IsChecked == true,
     };
 
-    // 解像度は出力設定なのでプリセットでは変えない
     private void WriteNoiseSettings(NoiseSettings s)
     {
         _suppressApply = true;
         try
         {
-            NoiseTypeBox.SelectedIndex = (int)s.Type;
-            SeedBox.Value = s.Seed;
-            FrequencySlider.Value = s.Frequency;
-            OctavesSlider.Value = s.Octaves;
-            PersistenceSlider.Value = s.Persistence;
-            SeamBox.SelectedIndex = (int)s.Seam;
-            LacunaritySlider.Value = s.Lacunarity;
-            FractalBox.SelectedIndex = (int)s.Fractal;
-            WorleyModeBox.SelectedIndex = (int)s.Worley;
-            WarpSlider.Value = s.WarpStrength;
-            ContrastSlider.Value = s.Contrast;
-            BrightnessSlider.Value = s.Brightness;
-            InvertBox.IsChecked = s.Invert;
+            WriteNoiseControls(s);
         }
         finally
         {
             _suppressApply = false;
         }
         ApplySettings();
+    }
+
+    // 解像度は出力設定なので含めない (プリセットでは変えない)
+    private void WriteNoiseControls(NoiseSettings s)
+    {
+        NoiseTypeBox.SelectedIndex = (int)s.Type;
+        SeedBox.Value = s.Seed;
+        FrequencySlider.Value = s.Frequency;
+        OctavesSlider.Value = s.Octaves;
+        PersistenceSlider.Value = s.Persistence;
+        SeamBox.SelectedIndex = (int)s.Seam;
+        LacunaritySlider.Value = s.Lacunarity;
+        FractalBox.SelectedIndex = (int)s.Fractal;
+        WorleyModeBox.SelectedIndex = (int)s.Worley;
+        WarpSlider.Value = s.WarpStrength;
+        ContrastSlider.Value = s.Contrast;
+        BrightnessSlider.Value = s.Brightness;
+        InvertBox.IsChecked = s.Invert;
     }
 
     private void RefreshPresetList(string? selectName)
