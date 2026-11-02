@@ -1,0 +1,425 @@
+<!-- 部品の見た目と動き。OS のアニメーション効果がオフのときは Motion.Apply が Transitions を無効にする -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:ui="using:UskEffect.App.Controls.Ui">
+  <ResourceDictionary.MergedDictionaries>
+    <MergeResourceInclude Source="/Theme/Tokens.axaml" />
+  </ResourceDictionary.MergedDictionaries>
+
+  <!-- ボタン: 既定 + .btn .ico .tool .link .num .swatch -->
+  <ControlTheme x:Key="{x:Type Button}" TargetType="Button">
+    <Setter Property="Background" Value="{StaticResource Ue.Transparent}" />
+    <Setter Property="Foreground" Value="{StaticResource Ue.Text}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="{StaticResource Ue.Radius}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="RenderTransformOrigin" Value="50%,50%" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="{StaticResource Ue.Motion.Fast}" Easing="{StaticResource Ue.Ease}" />
+        <BrushTransition Property="Foreground" Duration="{StaticResource Ue.Motion.Fast}" Easing="{StaticResource Ue.Ease}" />
+        <TransformOperationsTransition Property="RenderTransform" Duration="{StaticResource Ue.Motion.Fast}" Easing="{StaticResource Ue.Ease}" />
+        <DoubleTransition Property="Opacity" Duration="{StaticResource Ue.Motion.Fast}" Easing="{StaticResource Ue.Ease}" />
+      </Transitions>
+    </Setter>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}"
+                Padding="{TemplateBinding Padding}">
+          <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                            Foreground="{TemplateBinding Foreground}"
+                            HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pressed"><Setter Property="RenderTransform" Value="scale(0.97)" /></Style>
+    <Style Selector="^:disabled">
+      <Setter Property="Opacity" Value="{StaticResource Ue.Size.DisabledOpacity}" />
+      <Setter Property="Cursor" Value="Arrow" />
+    </Style>
+
+    <Style Selector="^.btn">
+      <Setter Property="Height" Value="{StaticResource Ue.Size.Field}" />
+      <Setter Property="Padding" Value="{StaticResource Ue.Pad.Button}" />
+      <Setter Property="Background" Value="{StaticResource Ue.Raised}" />
+    </Style>
+    <Style Selector="^.btn:pointerover"><Setter Property="Background" Value="{StaticResource Ue.Hover}" /></Style>
+
+    <Style Selector="^.ico">
+      <Setter Property="Width" Value="{StaticResource Ue.Size.IconButton}" />
+      <Setter Property="Height" Value="{StaticResource Ue.Size.IconButton}" />
+      <Setter Property="Foreground" Value="{StaticResource Ue.Muted}" />
+    </Style>
+    <Style Selector="^.ico:pointerover">
+      <Setter Property="Background" Value="{StaticResource Ue.Hover}" />
+      <Setter Property="Foreground" Value="{StaticResource Ue.Text}" />
+    </Style>
+
+    <Style Selector="^.tool">
+      <Setter Property="Width" Value="{StaticResource Ue.Size.Tool}" />
+      <Setter Property="Height" Value="{StaticResource Ue.Size.Tool}" />
+      <Setter Property="Foreground" Value="{StaticResource Ue.Muted}" />
+    </Style>
+    <Style Selector="^.tool:pointerover">
+      <Setter Property="Background" Value="{StaticResource Ue.Hover}" />
+      <Setter Property="Foreground" Value="{StaticResource Ue.Text}" />
+    </Style>
+
+    <Style Selector="^.link"><Setter Property="Foreground" Value="{StaticResource Ue.Muted}" /></Style>
+    <Style Selector="^.link:pointerover"><Setter Property="Foreground" Value="{StaticResource Ue.Accent}" /></Style>
+    <Style Selector="^.link.bad"><Setter Property="Foreground" Value="{StaticResource Ue.Bad}" /></Style>
+
+    <Style Selector="^.num">
+      <Setter Property="Width" Value="{StaticResource Ue.Size.Field}" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="Foreground" Value="{StaticResource Ue.Muted}" />
+    </Style>
+    <Style Selector="^.num:pointerover">
+      <Setter Property="Background" Value="{StaticResource Ue.Hover}" />
+      <Setter Property="Foreground" Value="{StaticResource Ue.Text}" />
+    </Style>
+
+    <Style Selector="^.swatch">
+      <Setter Property="Width" Value="{StaticResource Ue.Size.Field}" />
+      <Setter Property="Height" Value="{StaticResource Ue.Size.Field}" />
+    </Style>
+  </ControlTheme>
+
+  <!-- 一体型の調整欄 -->
+  <ControlTheme x:Key="{x:Type ui:SliderField}" TargetType="ui:SliderField">
+    <Setter Property="Height" Value="{StaticResource Ue.Size.Field}" />
+    <Setter Property="Background" Value="{StaticResource Ue.Raised}" />
+    <Setter Property="Foreground" Value="{StaticResource Ue.Text}" />
+    <Setter Property="CornerRadius" Value="{StaticResource Ue.Radius}" />
+    <Setter Property="Cursor" Value="SizeWestEast" />
+    <Setter Property="Focusable" Value="True" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="{StaticResource Ue.Motion.Fast}" Easing="{StaticResource Ue.Ease}" />
+      </Transitions>
+    </Setter>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}" ClipToBounds="True">
+          <Panel>
+            <Border Name="PART_Fill" Background="{StaticResource Ue.Fill}" HorizontalAlignment="Left" />
+            <Grid Margin="{StaticResource Ue.Pad.Field}" ColumnDefinitions="Auto,Auto,*,Auto">
+              <TextBlock Text="{TemplateBinding Label}" VerticalAlignment="Center" />
+              <Border Grid.Column="1" Classes="help" IsVisible="{TemplateBinding HelpText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                      ToolTip.Tip="{TemplateBinding HelpText}" ToolTip.ShowDelay="300">
+                <TextBlock Text="?" FontSize="{StaticResource Ue.FontSize.Help}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                           Foreground="{StaticResource Ue.Muted}" />
+              </Border>
+              <TextBlock Name="PART_Value" Grid.Column="3" FontFamily="{StaticResource Ue.Font.Mono}" VerticalAlignment="Center" />
+            </Grid>
+          </Panel>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^ /template/ Border#PART_Fill">
+      <Setter Property="Transitions">
+        <Transitions>
+          <DoubleTransition Property="Width" Duration="{StaticResource Ue.Motion.Fill}" Easing="{StaticResource Ue.Ease}" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="^:pointerover"><Setter Property="Background" Value="{StaticResource Ue.Hover}" /></Style>
+    <Style Selector="^:disabled"><Setter Property="Opacity" Value="{StaticResource Ue.Size.DisabledOpacity}" /></Style>
+  </ControlTheme>
+
+  <!-- 滑るボタン群 -->
+  <ControlTheme x:Key="Ue.SegmentItem" TargetType="ListBoxItem">
+    <Setter Property="Background" Value="{StaticResource Ue.Transparent}" />
+    <Setter Property="Foreground" Value="{StaticResource Ue.Muted}" />
+    <Setter Property="Padding" Value="{StaticResource Ue.Pad.SegmentItem}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="CornerRadius" Value="{StaticResource Ue.RadiusInner}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="RenderTransformOrigin" Value="50%,50%" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Foreground" Duration="{StaticResource Ue.Motion.Fast}" Easing="{StaticResource Ue.Ease}" />
+        <TransformOperationsTransition Property="RenderTransform" Duration="{StaticResource Ue.Motion.Fast}" Easing="{StaticResource Ue.Ease}" />
+      </Transitions>
+    </Setter>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}" Padding="{TemplateBinding Padding}">
+          <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                            Foreground="{TemplateBinding Foreground}"
+                            HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover"><Setter Property="Foreground" Value="{StaticResource Ue.Text}" /></Style>
+    <Style Selector="^:selected"><Setter Property="Foreground" Value="{StaticResource Ue.Accent}" /></Style>
+    <Style Selector="^:pressed"><Setter Property="RenderTransform" Value="scale(0.97)" /></Style>
+    <Style Selector="^:disabled">
+      <Setter Property="Opacity" Value="{StaticResource Ue.Size.DisabledOpacity}" />
+      <Setter Property="Cursor" Value="Arrow" />
+    </Style>
+  </ControlTheme>
+
+  <ControlTheme x:Key="{x:Type ui:SegmentedControl}" TargetType="ui:SegmentedControl">
+    <Setter Property="Height" Value="{StaticResource Ue.Size.Field}" />
+    <Setter Property="Background" Value="{StaticResource Ue.Ground}" />
+    <Setter Property="CornerRadius" Value="{StaticResource Ue.Radius}" />
+    <Setter Property="Padding" Value="{StaticResource Ue.Pad.Segment}" />
+    <Setter Property="SelectionMode" Value="Single,AlwaysSelected" />
+    <Setter Property="ItemContainerTheme" Value="{StaticResource Ue.SegmentItem}" />
+    <Setter Property="ItemsPanel">
+      <ItemsPanelTemplate><ui:SegmentPanel /></ItemsPanelTemplate>
+    </Setter>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}" Padding="{TemplateBinding Padding}">
+          <Panel>
+            <Border Name="PART_Thumb" Background="{StaticResource Ue.Raised}" CornerRadius="{StaticResource Ue.RadiusInner}" HorizontalAlignment="Left" />
+            <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}" />
+          </Panel>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^ /template/ Border#PART_Thumb">
+      <Setter Property="Transitions">
+        <Transitions>
+          <TransformOperationsTransition Property="RenderTransform" Duration="{StaticResource Ue.Motion.Thumb}" Easing="{StaticResource Ue.Ease}" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="^:disabled"><Setter Property="Opacity" Value="{StaticResource Ue.Size.DisabledOpacity}" /></Style>
+  </ControlTheme>
+
+  <!-- スイッチ -->
+  <ControlTheme x:Key="{x:Type ui:SwitchButton}" TargetType="ui:SwitchButton">
+    <Setter Property="Width" Value="{StaticResource Ue.Size.SwitchWidth}" />
+    <Setter Property="Height" Value="{StaticResource Ue.Size.SwitchHeight}" />
+    <Setter Property="Background" Value="{StaticResource Ue.Line}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="{StaticResource Ue.Motion.Toggle}" Easing="{StaticResource Ue.Ease}" />
+      </Transitions>
+    </Setter>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="{TemplateBinding Background}" CornerRadius="{StaticResource Ue.RadiusSwitch}">
+          <Border Name="PART_Knob" Width="{StaticResource Ue.Size.SwitchKnob}" Height="{StaticResource Ue.Size.SwitchKnob}"
+                  CornerRadius="{StaticResource Ue.RadiusKnob}" Background="{StaticResource Ue.Text}"
+                  HorizontalAlignment="Left" VerticalAlignment="Center" Margin="2,0,0,0" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^ /template/ Border#PART_Knob">
+      <Setter Property="RenderTransform" Value="translateX(0px)" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <TransformOperationsTransition Property="RenderTransform" Duration="{StaticResource Ue.Motion.Toggle}" Easing="{StaticResource Ue.Ease}" />
+          <BrushTransition Property="Background" Duration="{StaticResource Ue.Motion.Toggle}" Easing="{StaticResource Ue.Ease}" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="^:checked"><Setter Property="Background" Value="{StaticResource Ue.Fill}" /></Style>
+    <Style Selector="^:checked /template/ Border#PART_Knob">
+      <Setter Property="RenderTransform" Value="translateX(14px)" />
+      <Setter Property="Background" Value="{StaticResource Ue.Accent}" />
+    </Style>
+    <Style Selector="^:disabled"><Setter Property="Opacity" Value="{StaticResource Ue.Size.DisabledOpacity}" /></Style>
+  </ControlTheme>
+
+  <!-- 折りたたみ見出し -->
+  <ControlTheme x:Key="{x:Type ui:SectionHeader}" TargetType="ui:SectionHeader">
+    <Setter Property="Height" Value="{StaticResource Ue.Size.Field}" />
+    <Setter Property="Margin" Value="{StaticResource Ue.Margin.Heading}" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="Background" Value="{StaticResource Ue.Transparent}" />
+    <Setter Property="Foreground" Value="{StaticResource Ue.Text}" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="IsChecked" Value="True" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Foreground" Duration="{StaticResource Ue.Motion.Fast}" Easing="{StaticResource Ue.Ease}" />
+      </Transitions>
+    </Setter>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <StackPanel Orientation="Horizontal" Spacing="{StaticResource Ue.Gap.Small}" Background="{TemplateBinding Background}">
+          <Path Name="PART_Chevron" Classes="stroke" Data="{StaticResource Icon.Chevron}" Stroke="{StaticResource Ue.Muted}"
+                Width="{StaticResource Ue.Size.Chevron}" Height="{StaticResource Ue.Size.Chevron}" VerticalAlignment="Center" />
+          <ContentPresenter Content="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}" VerticalAlignment="Center" />
+        </StackPanel>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^ /template/ Path#PART_Chevron">
+      <Setter Property="RenderTransform" Value="rotate(-90deg)" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <TransformOperationsTransition Property="RenderTransform" Duration="{StaticResource Ue.Motion.Toggle}" Easing="{StaticResource Ue.Ease}" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="^:checked /template/ Path#PART_Chevron"><Setter Property="RenderTransform" Value="rotate(0deg)" /></Style>
+    <Style Selector="^:pointerover"><Setter Property="Foreground" Value="{StaticResource Ue.Accent}" /></Style>
+  </ControlTheme>
+
+  <!-- プルダウン -->
+  <ControlTheme x:Key="Ue.ComboItem" TargetType="ComboBoxItem">
+    <Setter Property="Height" Value="{StaticResource Ue.Size.Field}" />
+    <Setter Property="Background" Value="{StaticResource Ue.Transparent}" />
+    <Setter Property="Foreground" Value="{StaticResource Ue.Text}" />
+    <Setter Property="Padding" Value="{StaticResource Ue.Pad.Field}" />
+    <Setter Property="CornerRadius" Value="{StaticResource Ue.RadiusInner}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="{StaticResource Ue.Motion.Fast}" Easing="{StaticResource Ue.Ease}" />
+      </Transitions>
+    </Setter>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}" Padding="{TemplateBinding Padding}">
+          <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                            Foreground="{TemplateBinding Foreground}" VerticalAlignment="Center" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover"><Setter Property="Background" Value="{StaticResource Ue.Hover}" /></Style>
+    <Style Selector="^:selected"><Setter Property="Foreground" Value="{StaticResource Ue.Accent}" /></Style>
+    <Style Selector="^:focus-visible"><Setter Property="Background" Value="{StaticResource Ue.Hover}" /></Style>
+  </ControlTheme>
+
+  <ControlTheme x:Key="{x:Type ComboBox}" TargetType="ComboBox">
+    <Setter Property="Height" Value="{StaticResource Ue.Size.Field}" />
+    <Setter Property="Background" Value="{StaticResource Ue.Raised}" />
+    <Setter Property="Foreground" Value="{StaticResource Ue.Text}" />
+    <Setter Property="CornerRadius" Value="{StaticResource Ue.Radius}" />
+    <Setter Property="Padding" Value="{StaticResource Ue.Pad.Dropdown}" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="MaxDropDownHeight" Value="320" />
+    <Setter Property="ItemContainerTheme" Value="{StaticResource Ue.ComboItem}" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="{StaticResource Ue.Motion.Fast}" Easing="{StaticResource Ue.Ease}" />
+      </Transitions>
+    </Setter>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Name="PART_Root" Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}" Padding="{TemplateBinding Padding}">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Name="PART_Placeholder" Text="{TemplateBinding PlaceholderText}" Foreground="{StaticResource Ue.Muted}"
+                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                       IsVisible="{TemplateBinding SelectionBoxItem, Converter={x:Static ObjectConverters.IsNull}}" />
+            <ContentControl Content="{TemplateBinding SelectionBoxItem}" Foreground="{TemplateBinding Foreground}" VerticalAlignment="Center" />
+            <Path Name="PART_Chevron" Grid.Column="1" Classes="stroke" Data="{StaticResource Icon.Chevron}" Stroke="{StaticResource Ue.Muted}"
+                  Width="{StaticResource Ue.Size.Chevron}" Height="{StaticResource Ue.Size.Chevron}" Margin="6,0,0,0" VerticalAlignment="Center" />
+            <!-- 別ウィンドウのポップアップなので子 HWND の上にも出せる -->
+            <Popup Name="PART_Popup" WindowManagerAddShadowHint="False"
+                   IsOpen="{TemplateBinding IsDropDownOpen, Mode=TwoWay}"
+                   MinWidth="{Binding Bounds.Width, RelativeSource={RelativeSource TemplatedParent}}"
+                   MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                   PlacementTarget="PART_Root" IsLightDismissEnabled="True">
+              <Border Name="PART_PopupBorder" Background="{StaticResource Ue.Raised}" BorderBrush="{StaticResource Ue.Line}"
+                      BorderThickness="{StaticResource Ue.Line.All}" CornerRadius="{StaticResource Ue.Radius}" Padding="{StaticResource Ue.Pad.Popup}">
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                  <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}" />
+                </ScrollViewer>
+              </Border>
+            </Popup>
+          </Grid>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^ /template/ Path#PART_Chevron">
+      <Setter Property="RenderTransform" Value="rotate(0deg)" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <TransformOperationsTransition Property="RenderTransform" Duration="{StaticResource Ue.Motion.Toggle}" Easing="{StaticResource Ue.Ease}" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="^:dropdownopen /template/ Path#PART_Chevron"><Setter Property="RenderTransform" Value="rotate(180deg)" /></Style>
+    <Style Selector="^:pointerover"><Setter Property="Background" Value="{StaticResource Ue.Hover}" /></Style>
+    <Style Selector="^:disabled"><Setter Property="Opacity" Value="{StaticResource Ue.Size.DisabledOpacity}" /></Style>
+  </ControlTheme>
+
+  <!-- 文字入力 -->
+  <ControlTheme x:Key="{x:Type TextBox}" TargetType="TextBox">
+    <Setter Property="Height" Value="{StaticResource Ue.Size.Field}" />
+    <Setter Property="Background" Value="{StaticResource Ue.Raised}" />
+    <Setter Property="Foreground" Value="{StaticResource Ue.Text}" />
+    <Setter Property="CaretBrush" Value="{StaticResource Ue.Text}" />
+    <Setter Property="SelectionBrush" Value="{StaticResource Ue.Fill}" />
+    <Setter Property="SelectionForegroundBrush" Value="{StaticResource Ue.Text}" />
+    <Setter Property="CornerRadius" Value="{StaticResource Ue.Radius}" />
+    <Setter Property="Padding" Value="{StaticResource Ue.Pad.Field}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Cursor" Value="IBeam" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}" Padding="{TemplateBinding Padding}">
+          <Panel VerticalAlignment="{TemplateBinding VerticalContentAlignment}">
+            <TextBlock Name="PART_Placeholder" Text="{TemplateBinding PlaceholderText}" Foreground="{StaticResource Ue.Muted}"
+                       IsVisible="{TemplateBinding Text, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
+            <TextPresenter Name="PART_TextPresenter"
+                           Text="{TemplateBinding Text, Mode=TwoWay}"
+                           CaretIndex="{TemplateBinding CaretIndex}"
+                           SelectionStart="{TemplateBinding SelectionStart}"
+                           SelectionEnd="{TemplateBinding SelectionEnd}"
+                           TextAlignment="{TemplateBinding TextAlignment}"
+                           TextWrapping="{TemplateBinding TextWrapping}"
+                           SelectionBrush="{TemplateBinding SelectionBrush}"
+                           SelectionForegroundBrush="{TemplateBinding SelectionForegroundBrush}"
+                           CaretBrush="{TemplateBinding CaretBrush}" />
+          </Panel>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+  <!-- 説明札 -->
+  <ControlTheme x:Key="{x:Type ToolTip}" TargetType="ToolTip">
+    <Setter Property="Background" Value="{StaticResource Ue.Panel}" />
+    <Setter Property="Foreground" Value="{StaticResource Ue.Text}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Ue.Accent}" />
+    <Setter Property="BorderThickness" Value="{StaticResource Ue.Line.All}" />
+    <Setter Property="CornerRadius" Value="{StaticResource Ue.Radius}" />
+    <Setter Property="Padding" Value="{StaticResource Ue.Pad.Tip}" />
+    <Setter Property="MaxWidth" Value="{StaticResource Ue.Size.Tip}" />
+    <Setter Property="FontSize" Value="{StaticResource Ue.FontSize}" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                CornerRadius="{TemplateBinding CornerRadius}" Padding="{TemplateBinding Padding}">
+          <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                            Foreground="{TemplateBinding Foreground}" TextWrapping="Wrap" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+  <!-- 吹き出し (ポップアップ) -->
+  <ControlTheme x:Key="{x:Type FlyoutPresenter}" TargetType="FlyoutPresenter">
+    <Setter Property="Background" Value="{StaticResource Ue.Raised}" />
+    <Setter Property="Foreground" Value="{StaticResource Ue.Text}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Ue.Line}" />
+    <Setter Property="BorderThickness" Value="{StaticResource Ue.Line.All}" />
+    <Setter Property="CornerRadius" Value="{StaticResource Ue.Radius}" />
+    <Setter Property="Padding" Value="{StaticResource Ue.Pad.PopupWide}" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                CornerRadius="{TemplateBinding CornerRadius}" Padding="{TemplateBinding Padding}">
+          <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+</ResourceDictionary>

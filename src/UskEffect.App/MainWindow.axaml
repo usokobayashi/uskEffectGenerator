@@ -1,211 +1,62 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="using:UskEffect.App.Controls.Ui"
         xmlns:controls="using:UskEffect.App.Controls"
+        xmlns:views="using:UskEffect.App.Views"
         x:Class="UskEffect.App.MainWindow"
         Title="uskEffect"
         Width="1280" Height="800" MinWidth="800" MinHeight="500"
         WindowStartupLocation="CenterScreen" WindowState="Maximized">
+  <Panel x:Name="RootPanel" Opacity="0">
+    <DockPanel>
+      <views:TopBar x:Name="Top" DockPanel.Dock="Top" />
+      <views:StatusBar x:Name="Status" DockPanel.Dock="Bottom" />
+      <views:TimelineBar x:Name="Timeline" DockPanel.Dock="Bottom" />
 
-  <Window.Styles>
-    <Style Selector="TextBlock.label">
-      <Setter Property="Margin" Value="0,10,0,2" />
-      <Setter Property="Opacity" Value="0.8" />
-    </Style>
-    <Style Selector="ComboBox">
-      <Setter Property="HorizontalAlignment" Value="Stretch" />
-    </Style>
-  </Window.Styles>
+      <views:ToolRail DockPanel.Dock="Left" />
 
-  <DockPanel>
-    <!-- 上部: メニュー・ファイル操作 (要件 §6) -->
-    <Menu DockPanel.Dock="Top" Background="#2D2D30">
-      <MenuItem Header="ファイル(_F)">
-        <MenuItem x:Name="NewMenuItem" Header="新規(_N)" InputGesture="Ctrl+N" HotKey="Ctrl+N" />
-        <MenuItem x:Name="OpenMenuItem" Header="開く(_O)..." InputGesture="Ctrl+O" HotKey="Ctrl+O" />
-        <Separator />
-        <MenuItem x:Name="SaveMenuItem" Header="保存(_S)" InputGesture="Ctrl+S" HotKey="Ctrl+S" />
-        <MenuItem x:Name="SaveAsMenuItem" Header="名前を付けて保存(_A)..." InputGesture="Ctrl+Shift+S" HotKey="Ctrl+Shift+S" />
-        <Separator />
-        <MenuItem x:Name="ExportMenuItem" Header="画像を書き出し(_E)..." InputGesture="Ctrl+E" HotKey="Ctrl+E" />
-        <Separator />
-        <MenuItem x:Name="ExitMenuItem" Header="終了(_X)" />
-      </MenuItem>
-    </Menu>
+      <!-- 右: プレビューと設定のタブ -->
+      <Border x:Name="RightPanel" DockPanel.Dock="Right" Width="{StaticResource Ue.Size.RightPanel}" Background="{StaticResource Ue.Panel}"
+              BorderBrush="{StaticResource Ue.Line}" BorderThickness="{StaticResource Ue.Line.Left}">
+        <DockPanel>
+          <Border DockPanel.Dock="Top" Padding="{StaticResource Ue.Pad.Previews}" BorderBrush="{StaticResource Ue.Line}" BorderThickness="{StaticResource Ue.Line.Bottom}">
+            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="{StaticResource Ue.Gap.Line}">
+              <ui:PreviewThumb x:Name="TileThumb" Text="{DynamicResource S.View.Tile}" />
+              <ui:PreviewThumb x:Name="PolarThumb" Grid.Column="1" Text="{DynamicResource S.View.Polar}" />
+              <ui:PreviewThumb x:Name="EffectThumb" Grid.Column="2" Text="{DynamicResource S.View.Effect}" />
+            </Grid>
+          </Border>
+          <Border DockPanel.Dock="Top" Padding="{StaticResource Ue.Pad.Tabs}">
+            <ui:SegmentedControl x:Name="TabSegment" SelectedIndex="0">
+              <ListBoxItem Content="{DynamicResource S.Tab.Noise}" Padding="2,0" />
+              <ListBoxItem Padding="2,0">
+                <StackPanel Orientation="Horizontal" Spacing="3">
+                  <TextBlock Text="{DynamicResource S.Tab.Seam}" />
+                  <TextBlock x:Name="SeamMarkText" FontWeight="Bold" />
+                </StackPanel>
+              </ListBoxItem>
+              <ListBoxItem Content="{DynamicResource S.Tab.Effect}" Padding="2,0" />
+              <ListBoxItem Content="{DynamicResource S.Tab.Layer}" Padding="2,0" />
+            </ui:SegmentedControl>
+          </Border>
+          <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+            <Panel Margin="{StaticResource Ue.Pad.Body}">
+              <views:NoisePanel x:Name="NoiseTab" />
+              <views:SeamPanel x:Name="SeamTab" IsVisible="False" />
+              <views:EffectPanel x:Name="EffectTab" IsVisible="False" />
+              <views:LayerPanel x:Name="LayerTab" IsVisible="False" />
+            </Panel>
+          </ScrollViewer>
+        </DockPanel>
+      </Border>
 
-    <!-- 下部: GPU 状態・解像度 -->
-    <Border DockPanel.Dock="Bottom" Padding="10,4" Background="#1E1E1E">
-      <TextBlock x:Name="StatusText" FontFamily="Consolas,monospace" FontSize="12" Text="GPU 初期化中..." />
-    </Border>
-
-    <!-- 下部: エフェクト再生タイムライン (FR-05) -->
-    <Border x:Name="TimelineBar" DockPanel.Dock="Bottom" Padding="10,6" Background="#252526">
-      <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto">
-        <Button x:Name="PlayButton" Content="▶ 再生" MinWidth="120" HorizontalContentAlignment="Center" />
-        <Button Grid.Column="1" x:Name="StopButton" Content="■ 停止" Margin="6,0,0,0" />
-        <Slider Grid.Column="2" x:Name="TimelineSlider" Minimum="0" Maximum="1" Margin="12,0" VerticalAlignment="Center" />
-        <TextBlock Grid.Column="3" x:Name="TimeText" FontFamily="Consolas,monospace" VerticalAlignment="Center" Width="120" Text="0.00 / 2.00 s" />
-        <CheckBox Grid.Column="4" x:Name="LoopBox" Content="ループ" IsChecked="True" Margin="8,0" />
-        <TextBlock Grid.Column="5" Text="長さ [s]" VerticalAlignment="Center" Margin="8,0,6,0" Opacity="0.8" />
-        <NumericUpDown Grid.Column="6" x:Name="DurationBox" Value="2" Minimum="0.1" Maximum="60" Increment="0.1" FormatString="0.0" Width="110" />
-      </Grid>
-    </Border>
-
-    <!-- シェーダーエラー (FR-10) -->
-    <Border x:Name="ErrorPanel" DockPanel.Dock="Bottom" Background="#3A1414" Padding="10,6" IsVisible="False">
-      <SelectableTextBlock x:Name="ErrorText" Foreground="#FF8080" FontFamily="Consolas,monospace" FontSize="12"
-                           TextWrapping="Wrap" MaxHeight="160" />
-    </Border>
-
-    <!-- 右: パラメータ -->
-    <ScrollViewer DockPanel.Dock="Right" Width="300" Background="#252526">
-      <StackPanel Margin="14">
-        <TextBlock Text="ノイズ生成" FontWeight="Bold" FontSize="15" />
-
-        <TextBlock Classes="label" Text="プリセット" />
-        <ComboBox x:Name="PresetBox" PlaceholderText="プリセットを選択" />
-        <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,6,0,0">
-          <TextBox x:Name="PresetNameBox" PlaceholderText="保存する名前" />
-          <Button Grid.Column="1" x:Name="SavePresetButton" Content="保存" Margin="6,0,0,0" />
-          <Button Grid.Column="2" x:Name="DeletePresetButton" Content="削除" Margin="6,0,0,0" />
-        </Grid>
-        <TextBlock x:Name="PresetMessage" FontSize="11" Opacity="0.8" TextWrapping="Wrap" Margin="0,4,0,0" IsVisible="False" />
-
-        <TextBlock Classes="label" Text="種類" />
-        <ComboBox x:Name="NoiseTypeBox" SelectedIndex="0">
-          <ComboBoxItem Content="Perlin" />
-          <ComboBoxItem Content="Worley" />
-          <ComboBoxItem Content="Simplex" />
-        </ComboBox>
-
-        <TextBlock Classes="label" Text="Worley 距離" />
-        <ComboBox x:Name="WorleyModeBox" SelectedIndex="0">
-          <ComboBoxItem Content="F1（最近点）" />
-          <ComboBoxItem Content="F2（2 番目）" />
-          <ComboBoxItem Content="F2 − F1（セル境界）" />
-        </ComboBox>
-
-        <TextBlock Classes="label" Text="フラクタル" />
-        <ComboBox x:Name="FractalBox" SelectedIndex="0">
-          <ComboBoxItem Content="FBM" />
-          <ComboBoxItem Content="Ridged" />
-          <ComboBoxItem Content="Turbulence" />
-        </ComboBox>
-
-        <TextBlock Classes="label" Text="解像度" />
-        <ComboBox x:Name="ResolutionBox" SelectedIndex="1">
-          <ComboBoxItem Content="256" />
-          <ComboBoxItem Content="512" />
-          <ComboBoxItem Content="1024" />
-          <ComboBoxItem Content="2048" />
-        </ComboBox>
-
-        <TextBlock Classes="label" Text="Seed" />
-        <NumericUpDown x:Name="SeedBox" Value="1" Minimum="0" Maximum="999999" Increment="1" FormatString="0" />
-
-        <TextBlock Classes="label" x:Name="FrequencyLabel" Text="Frequency" />
-        <Slider x:Name="FrequencySlider" Minimum="1" Maximum="32" Value="4" TickFrequency="1" IsSnapToTickEnabled="True" />
-
-        <TextBlock Classes="label" x:Name="OctavesLabel" Text="Octaves" />
-        <Slider x:Name="OctavesSlider" Minimum="1" Maximum="8" Value="5" TickFrequency="1" IsSnapToTickEnabled="True" />
-
-        <TextBlock Classes="label" x:Name="PersistenceLabel" Text="Persistence" />
-        <Slider x:Name="PersistenceSlider" Minimum="0" Maximum="1" Value="0.5" />
-
-        <TextBlock Classes="label" x:Name="LacunarityLabel" Text="Lacunarity" />
-        <Slider x:Name="LacunaritySlider" Minimum="2" Maximum="4" Value="2" TickFrequency="1" IsSnapToTickEnabled="True" />
-
-        <TextBlock Classes="label" x:Name="WarpLabel" Text="ドメインワープ" />
-        <Slider x:Name="WarpSlider" Minimum="0" Maximum="0.5" Value="0" />
-
-        <TextBlock Classes="label" x:Name="ContrastLabel" Text="コントラスト" />
-        <Slider x:Name="ContrastSlider" Minimum="0" Maximum="3" Value="1" />
-
-        <TextBlock Classes="label" x:Name="BrightnessLabel" Text="明るさ" />
-        <Slider x:Name="BrightnessSlider" Minimum="-1" Maximum="1" Value="0" />
-
-        <CheckBox x:Name="InvertBox" Content="反転" Margin="0,6,0,0" />
-
-        <TextBlock Classes="label" Text="シームレス" />
-        <ComboBox x:Name="SeamBox" SelectedIndex="3">
-          <ComboBoxItem Content="OFF" />
-          <ComboBoxItem Content="X" />
-          <ComboBoxItem Content="Y" />
-          <ComboBoxItem Content="XY" />
-        </ComboBox>
-
-        <!-- シーム判定 (FR-04): 境界をまたぐ差分 ÷ 内部の差分。1 付近なら継ぎ目なし -->
-        <Border Margin="0,8,0,0" Padding="8,6" CornerRadius="4" Background="#1E1E1E">
-          <StackPanel>
-            <TextBlock x:Name="SeamVerdictText" FontWeight="Bold" TextWrapping="Wrap" Text="シーム判定: 解析中..." />
-            <TextBlock x:Name="SeamDetailText" FontFamily="Consolas,monospace" FontSize="11" Opacity="0.8" Margin="0,2,0,0" />
-          </StackPanel>
+      <!-- 中央: 表示の切り替えとキャンバス。キャンバスは子 HWND なので上に部品を重ねない -->
+      <DockPanel>
+        <views:ViewStrip x:Name="Strip" DockPanel.Dock="Top" />
+        <Border Background="{StaticResource Ue.Stage}">
+          <controls:D3DHost x:Name="Viewport" />
         </Border>
-
-        <TextBlock Text="プレビュー" FontWeight="Bold" FontSize="15" Margin="0,24,0,0" />
-
-        <TextBlock Classes="label" Text="表示" />
-        <ComboBox x:Name="ViewModeBox" SelectedIndex="0">
-          <ComboBoxItem Content="矩形" />
-          <ComboBoxItem Content="3×3 タイル" />
-          <ComboBoxItem Content="極座標" />
-          <ComboBoxItem Content="シーム検証（半タイルずらし）" />
-          <ComboBoxItem Content="エフェクト（タイムライン再生）" />
-        </ComboBox>
-
-        <!-- エフェクトプレビュー (FR-05 / FR-06) -->
-        <controls:EffectPanel x:Name="EffectSettingsPanel" />
-
-        <!-- 極座標 (FR-03) -->
-        <StackPanel x:Name="PolarPanel">
-          <TextBlock Classes="label" x:Name="InnerRadiusLabel" Text="内径" />
-          <Slider x:Name="InnerRadiusSlider" Minimum="0" Maximum="0.95" Value="0.3" />
-
-          <TextBlock Classes="label" x:Name="OuterRadiusLabel" Text="外径" />
-          <Slider x:Name="OuterRadiusSlider" Minimum="0.05" Maximum="1" Value="1" />
-
-          <TextBlock Classes="label" x:Name="RotationLabel" Text="回転" />
-          <Slider x:Name="RotationSlider" Minimum="0" Maximum="360" Value="0" />
-
-          <CheckBox x:Name="FlipAngularBox" Content="角度方向を反転（時計回り）" Margin="0,6,0,0" />
-          <CheckBox x:Name="FlipRadialBox" Content="内外を反転（外径側を v = 0）" />
-        </StackPanel>
-
-        <!-- シーム検証 (FR-04) -->
-        <StackPanel x:Name="SeamCheckPanel">
-          <TextBlock Classes="label" Text="ヒートマップ" />
-          <ComboBox x:Name="HeatmapBox" SelectedIndex="1">
-            <ComboBoxItem Content="なし" />
-            <ComboBoxItem Content="値の差分" />
-            <ComboBoxItem Content="勾配の差分（2 階差分）" />
-          </ComboBox>
-
-          <TextBlock Classes="label" x:Name="HeatThresholdLabel" Text="しきい値" />
-          <Slider x:Name="HeatThresholdSlider" Minimum="1.5" Maximum="10" Value="5" />
-        </StackPanel>
-
-        <TextBlock Classes="label" x:Name="ScrollULabel" Text="UV スクロール U" />
-        <Slider x:Name="ScrollUSlider" Minimum="-1" Maximum="1" Value="0" />
-
-        <TextBlock Classes="label" x:Name="ScrollVLabel" Text="UV スクロール V" />
-        <Slider x:Name="ScrollVSlider" Minimum="-1" Maximum="1" Value="0" />
-
-        <TextBlock Text="書き出し" FontWeight="Bold" FontSize="15" Margin="0,24,0,0" />
-        <TextBlock Classes="label" Text="チャンネル（ファイル → 画像を書き出し）" />
-        <ComboBox x:Name="ExportChannelsBox" SelectedIndex="0">
-          <ComboBoxItem Content="グレースケール 8bit" />
-          <ComboBoxItem Content="グレースケール 16bit（PNG のみ）" />
-          <ComboBoxItem Content="RGBA（RGB = 値、A = 255）" />
-          <ComboBoxItem Content="RGBA（RGB = 白、A = 値）" />
-        </ComboBox>
-
-        <CheckBox x:Name="VSyncBox" Content="VSync" IsChecked="True" Margin="0,12,0,0" />
-
-        <Button x:Name="ReloadButton" Content="シェーダー再読込" Margin="0,16,0,0" HorizontalAlignment="Stretch" />
-        <TextBlock x:Name="ShaderDirText" FontSize="11" Opacity="0.6" TextWrapping="Wrap" Margin="0,6,0,0" />
-      </StackPanel>
-    </ScrollViewer>
-
-    <!-- 中央: D3D11 描画サーフェス -->
-    <controls:D3DHost x:Name="Viewport" />
-  </DockPanel>
+      </DockPanel>
+    </DockPanel>
+  </Panel>
 </Window>

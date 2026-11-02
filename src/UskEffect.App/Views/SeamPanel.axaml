@@ -1,0 +1,29 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="using:UskEffect.App.Controls.Ui"
+             x:Class="UskEffect.App.Views.SeamPanel">
+  <StackPanel Spacing="{StaticResource Ue.Gap.Row}">
+    <Border Classes="chip">
+      <StackPanel Spacing="{StaticResource Ue.Gap.Tight}">
+        <TextBlock x:Name="VerdictText" FontWeight="Bold" TextWrapping="Wrap" />
+        <TextBlock x:Name="DetailText" Classes="muted mono" />
+      </StackPanel>
+    </Border>
+    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{StaticResource Ue.Gap.Normal}">
+      <TextBlock Classes="rowLabel" Text="{DynamicResource S.Seam.Overlay}" />
+      <ui:SegmentedControl x:Name="HeatmapSegment" Grid.Column="1" SelectedIndex="1">
+        <ListBoxItem Content="{DynamicResource S.Seam.OverlayOff}" Padding="2,0" />
+        <ListBoxItem Content="{DynamicResource S.Seam.OverlayValue}" Padding="2,0" />
+        <ListBoxItem Content="{DynamicResource S.Seam.OverlayGradient}" Padding="2,0" />
+      </ui:SegmentedControl>
+    </Grid>
+    <ui:SliderField x:Name="ThresholdField" Label="{DynamicResource S.Seam.Threshold}" Minimum="1.5" Maximum="10" Value="5" Step="0.1" ValueFormat="0.0×" />
+
+    <TextBlock Classes="heading" Text="{DynamicResource S.Seam.Fix}" Margin="{StaticResource Ue.Margin.Heading}" />
+    <StackPanel Orientation="Horizontal" Spacing="{StaticResource Ue.Gap.Normal}">
+      <Button Classes="btn" Content="{DynamicResource S.Seam.FixOffset}" IsEnabled="False" />
+      <Button Classes="btn" Content="{DynamicResource S.Seam.FixBlend}" IsEnabled="False" />
+    </StackPanel>
+    <TextBlock Classes="muted" Text="{DynamicResource S.Seam.FixNote}" TextWrapping="Wrap" />
+  </StackPanel>
+</UserControl>

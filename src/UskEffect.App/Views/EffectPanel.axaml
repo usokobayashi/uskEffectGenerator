@@ -1,0 +1,78 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="using:UskEffect.App.Controls.Ui"
+             x:Class="UskEffect.App.Views.EffectPanel">
+  <StackPanel Spacing="{StaticResource Ue.Gap.Row}">
+    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{StaticResource Ue.Gap.Normal}">
+      <TextBlock Classes="rowLabel" Text="{DynamicResource S.Effect.Blend}" />
+      <ui:SegmentedControl x:Name="BlendSegment" Grid.Column="1" SelectedIndex="1">
+        <ListBoxItem Content="Alpha" Padding="2,0" />
+        <ListBoxItem Content="Additive" Padding="2,0" />
+      </ui:SegmentedControl>
+    </Grid>
+    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{StaticResource Ue.Gap.Normal}">
+      <TextBlock Classes="rowLabel" Text="{DynamicResource S.Effect.Mapping}" />
+      <ui:SegmentedControl x:Name="MappingSegment" Grid.Column="1" SelectedIndex="0">
+        <ListBoxItem Content="{DynamicResource S.Effect.MappingRect}" Padding="2,0" />
+        <ListBoxItem Content="{DynamicResource S.Effect.MappingPolar}" Padding="2,0" />
+      </ui:SegmentedControl>
+    </Grid>
+    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{StaticResource Ue.Gap.Normal}">
+      <TextBlock Classes="rowLabel" Text="{DynamicResource S.Effect.Background}" />
+      <ui:SegmentedControl x:Name="BackgroundSegment" Grid.Column="1" SelectedIndex="1">
+        <ListBoxItem Content="{DynamicResource S.Effect.BgChecker}" Padding="2,0" />
+        <ListBoxItem Content="{DynamicResource S.Effect.BgBlack}" Padding="2,0" />
+        <ListBoxItem Content="{DynamicResource S.Effect.BgGray}" Padding="2,0" />
+      </ui:SegmentedControl>
+    </Grid>
+    <DockPanel MinHeight="{StaticResource Ue.Size.Field}">
+      <ui:SwitchButton x:Name="SoftMaskSwitch" DockPanel.Dock="Right" VerticalAlignment="Center" IsChecked="True" AutomationProperties.Name="{DynamicResource S.Effect.SoftMask}" />
+      <TextBlock Text="{DynamicResource S.Effect.SoftMask}" VerticalAlignment="Center" />
+    </DockPanel>
+    <DockPanel MinHeight="{StaticResource Ue.Size.Field}">
+      <ui:SwitchButton x:Name="TextureAlphaSwitch" DockPanel.Dock="Right" VerticalAlignment="Center" IsChecked="True" AutomationProperties.Name="{DynamicResource S.Effect.TextureAsAlpha}" />
+      <TextBlock Text="{DynamicResource S.Effect.TextureAsAlpha}" VerticalAlignment="Center" />
+    </DockPanel>
+
+    <ui:SectionHeader x:Name="MotionHeader" Content="{DynamicResource S.Effect.Motion}" />
+    <StackPanel Spacing="{StaticResource Ue.Gap.Row}" IsVisible="{Binding #MotionHeader.IsChecked}" x:CompileBindings="False">
+      <ui:SliderField x:Name="ScrollUField" Label="{DynamicResource S.Effect.ScrollU}" Minimum="-1" Maximum="1" Value="0" Step="0.01" ValueFormat="0.00 /s" />
+      <ui:SliderField x:Name="ScrollVField" Label="{DynamicResource S.Effect.ScrollV}" Minimum="-1" Maximum="1" Value="0" Step="0.01" ValueFormat="0.00 /s" />
+      <Grid ColumnDefinitions="Auto,*,*" ColumnSpacing="{StaticResource Ue.Gap.Line}">
+        <TextBlock Classes="rowLabel" Text="{DynamicResource S.Effect.Rotation}" />
+        <ui:SliderField x:Name="RotationStartField" Grid.Column="1" Label="{DynamicResource S.Effect.Start}" Minimum="-360" Maximum="360" Value="0" Step="1" ValueFormat="0°" />
+        <ui:SliderField x:Name="RotationEndField" Grid.Column="2" Label="{DynamicResource S.Effect.End}" Minimum="-360" Maximum="360" Value="0" Step="1" ValueFormat="0°" />
+      </Grid>
+      <Grid ColumnDefinitions="Auto,*,*" ColumnSpacing="{StaticResource Ue.Gap.Line}">
+        <TextBlock Classes="rowLabel" Text="{DynamicResource S.Effect.Scale}" />
+        <ui:SliderField x:Name="ScaleStartField" Grid.Column="1" Label="{DynamicResource S.Effect.Start}" Minimum="0.1" Maximum="2" Value="1" Step="0.01" />
+        <ui:SliderField x:Name="ScaleEndField" Grid.Column="2" Label="{DynamicResource S.Effect.End}" Minimum="0.1" Maximum="2" Value="1" Step="0.01" />
+      </Grid>
+    </StackPanel>
+
+    <ui:SectionHeader x:Name="LookHeader" Content="{DynamicResource S.Effect.Look}" />
+    <StackPanel Spacing="{StaticResource Ue.Gap.Row}" IsVisible="{Binding #LookHeader.IsChecked}" x:CompileBindings="False">
+      <Grid ColumnDefinitions="Auto,*,*" ColumnSpacing="{StaticResource Ue.Gap.Line}">
+        <TextBlock Classes="rowLabel" Text="{DynamicResource S.Effect.Alpha}" />
+        <ui:SliderField x:Name="AlphaStartField" Grid.Column="1" Label="{DynamicResource S.Effect.Start}" Minimum="0" Maximum="1" Value="1" Step="0.01" />
+        <ui:SliderField x:Name="AlphaEndField" Grid.Column="2" Label="{DynamicResource S.Effect.End}" Minimum="0" Maximum="1" Value="1" Step="0.01" />
+      </Grid>
+      <Grid ColumnDefinitions="Auto,*,*" ColumnSpacing="{StaticResource Ue.Gap.Line}">
+        <TextBlock Classes="rowLabel" Text="{DynamicResource S.Effect.Dissolve}" />
+        <ui:SliderField x:Name="DissolveStartField" Grid.Column="1" Label="{DynamicResource S.Effect.Start}" Minimum="0" Maximum="1" Value="0" Step="0.01" />
+        <ui:SliderField x:Name="DissolveEndField" Grid.Column="2" Label="{DynamicResource S.Effect.End}" Minimum="0" Maximum="1" Value="0" Step="0.01" />
+      </Grid>
+      <ui:SliderField x:Name="EdgeWidthField" Label="{DynamicResource S.Effect.EdgeWidth}" Minimum="0" Maximum="0.3" Value="0.08" Step="0.01" />
+      <StackPanel Orientation="Horizontal" Spacing="{StaticResource Ue.Gap.Normal}">
+        <TextBlock Classes="rowLabel" Text="{DynamicResource S.Effect.Color}" />
+        <ui:ColorSwatch x:Name="ColorStartSwatch" AutomationProperties.Name="{DynamicResource S.Effect.Start}" />
+        <TextBlock Classes="muted" Text="→" VerticalAlignment="Center" />
+        <ui:ColorSwatch x:Name="ColorEndSwatch" AutomationProperties.Name="{DynamicResource S.Effect.End}" />
+      </StackPanel>
+      <StackPanel Orientation="Horizontal" Spacing="{StaticResource Ue.Gap.Normal}">
+        <TextBlock Classes="rowLabel" Text="{DynamicResource S.Effect.EdgeColor}" />
+        <ui:ColorSwatch x:Name="EdgeColorSwatch" Color="#FF8C26" AutomationProperties.Name="{DynamicResource S.Effect.EdgeColor}" />
+      </StackPanel>
+    </StackPanel>
+  </StackPanel>
+</UserControl>

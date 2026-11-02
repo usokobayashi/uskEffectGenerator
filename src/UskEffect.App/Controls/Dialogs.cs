@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using UskEffect.App.Locale;
 
 namespace UskEffect.App.Controls;
 
@@ -15,12 +16,12 @@ public enum UnsavedChoice
 public static class Dialogs
 {
     public static Task ShowMessageAsync(Window owner, string title, string message) =>
-        ShowAsync(owner, title, message, dismissed: false, ("OK", true));
+        ShowAsync(owner, title, message, dismissed: false, (Loc.T("S.Dialog.Ok"), true));
 
     /// <summary>未保存の変更を保存するか確認する。ウィンドウを閉じた場合はキャンセル扱い。</summary>
     public static Task<UnsavedChoice> AskSaveChangesAsync(Window owner, string documentName) =>
-        ShowAsync(owner, "未保存の変更", $"「{documentName}」への変更を保存しますか？", dismissed: UnsavedChoice.Cancel,
-            ("保存する", UnsavedChoice.Save), ("保存しない", UnsavedChoice.Discard), ("キャンセル", UnsavedChoice.Cancel));
+        ShowAsync(owner, Loc.T("S.Dialog.UnsavedTitle"), Loc.F("S.Dialog.UnsavedBody", documentName), dismissed: UnsavedChoice.Cancel,
+            (Loc.T("S.Dialog.Save"), UnsavedChoice.Save), (Loc.T("S.Dialog.Discard"), UnsavedChoice.Discard), (Loc.T("S.Dialog.Cancel"), UnsavedChoice.Cancel));
 
     /// <summary>ボタンを押さずにウィンドウを閉じたときは dismissed を返す。</summary>
     private static async Task<T> ShowAsync<T>(Window owner, string title, string message, T dismissed, params (string Label, T Value)[] buttons)
@@ -40,7 +41,8 @@ public static class Dialogs
         var buttonRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Spacing = 8 };
         foreach (var (label, value) in buttons)
         {
-            var button = new Button { Content = label, MinWidth = 90, HorizontalContentAlignment = HorizontalAlignment.Center };
+            var button = new Button { Content = label };
+            button.Classes.Add("btn");
             button.Click += (_, _) =>
             {
                 result = value;

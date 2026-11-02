@@ -1,0 +1,35 @@
+<!-- 最下部: GPU 名、解像度、処理時間、fps、シェーダー再読込、VSync -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="UskEffect.App.Views.StatusBar">
+  <Border Background="{StaticResource Ue.Ground}" BorderBrush="{StaticResource Ue.Line}" BorderThickness="{StaticResource Ue.Line.Top}"
+          Height="{StaticResource Ue.Size.Status}" Padding="{StaticResource Ue.Pad.Bar}">
+    <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto,Auto,Auto" ColumnSpacing="{StaticResource Ue.Gap.Status}">
+      <Grid.Styles>
+        <Style Selector="TextBlock">
+          <Setter Property="FontSize" Value="{StaticResource Ue.FontSize.Small}" />
+          <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button">
+          <Setter Property="FontSize" Value="{StaticResource Ue.FontSize.Small}" />
+        </Style>
+      </Grid.Styles>
+      <TextBlock x:Name="GpuText" Classes="muted" MaxWidth="280" TextTrimming="CharacterEllipsis" Text="{DynamicResource S.Status.Starting}" />
+      <TextBlock x:Name="ResolutionText" Grid.Column="1" Classes="muted mono" />
+      <TextBlock x:Name="NoiseTimeText" Grid.Column="2" Classes="muted mono" />
+      <TextBlock x:Name="FrameTimeText" Grid.Column="3" Classes="muted mono" />
+      <TextBlock x:Name="FpsText" Grid.Column="4" Classes="muted mono" />
+      <TextBlock x:Name="MessageText" Grid.Column="5" Classes="muted" TextTrimming="CharacterEllipsis" Margin="8,0" />
+      <Button x:Name="ShaderErrorButton" Grid.Column="6" Classes="link bad" Content="{DynamicResource S.Status.ShaderErrors}" IsVisible="False">
+        <Button.Flyout>
+          <Flyout Placement="TopEdgeAlignedRight">
+            <SelectableTextBlock x:Name="ShaderErrorText" Foreground="{StaticResource Ue.Bad}" FontFamily="{StaticResource Ue.Font.Mono}"
+                                 TextWrapping="Wrap" MaxWidth="640" />
+          </Flyout>
+        </Button.Flyout>
+      </Button>
+      <Button x:Name="ReloadButton" Grid.Column="7" Classes="link" Content="{DynamicResource S.Status.ReloadShaders}" />
+      <Button x:Name="VSyncButton" Grid.Column="8" Classes="link" Content="{DynamicResource S.Status.VSyncOn}" />
+    </Grid>
+  </Border>
+</UserControl>

@@ -1,0 +1,44 @@
+<!-- 中央の帯: 表示の切り替え、極座標の設定、表示倍率 -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="using:UskEffect.App.Controls.Ui"
+             x:Class="UskEffect.App.Views.ViewStrip">
+  <Border Classes="bar" BorderThickness="{StaticResource Ue.Line.Bottom}">
+    <DockPanel>
+      <ui:SegmentedControl x:Name="ViewSegment" DockPanel.Dock="Left" VerticalAlignment="Center" SelectedIndex="0">
+        <ListBoxItem Content="{DynamicResource S.View.Rect}" />
+        <ListBoxItem Content="{DynamicResource S.View.Tile}" />
+        <ListBoxItem Content="{DynamicResource S.View.Polar}" />
+        <ListBoxItem Content="{DynamicResource S.View.Seam}" />
+        <ListBoxItem Content="{DynamicResource S.View.Effect}" />
+      </ui:SegmentedControl>
+      <TextBlock x:Name="ZoomText" DockPanel.Dock="Right" Classes="muted mono" VerticalAlignment="Center" Margin="8,0,0,0" />
+      <Button x:Name="PolarButton" DockPanel.Dock="Right" Classes="btn" Width="{StaticResource Ue.Size.PolarButton}"
+              VerticalAlignment="Center" HorizontalContentAlignment="Stretch">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock x:Name="PolarSummaryText" Classes="mono" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+          <Path Grid.Column="1" Classes="stroke" Data="{StaticResource Icon.Chevron}" Stroke="{StaticResource Ue.Muted}"
+                Width="{StaticResource Ue.Size.Chevron}" Height="{StaticResource Ue.Size.Chevron}" VerticalAlignment="Center" />
+        </Grid>
+        <Button.Flyout>
+          <Flyout Placement="BottomEdgeAlignedRight">
+            <StackPanel Width="{StaticResource Ue.Size.PolarPopup}" Spacing="{StaticResource Ue.Gap.Row}">
+              <ui:SliderField x:Name="InnerRadiusField" Label="{DynamicResource S.Polar.Inner}" Minimum="0" Maximum="0.95" Value="0.3" Step="0.01" />
+              <ui:SliderField x:Name="OuterRadiusField" Label="{DynamicResource S.Polar.Outer}" Minimum="0.05" Maximum="1" Value="1" Step="0.01" />
+              <ui:SliderField x:Name="RotationField" Label="{DynamicResource S.Polar.Rotation}" Minimum="0" Maximum="360" Value="0" Step="1" ValueFormat="0°" />
+              <DockPanel>
+                <ui:SwitchButton x:Name="FlipAngularSwitch" DockPanel.Dock="Right" VerticalAlignment="Center" />
+                <TextBlock Text="{DynamicResource S.Polar.FlipAngular}" VerticalAlignment="Center" />
+              </DockPanel>
+              <DockPanel>
+                <ui:SwitchButton x:Name="FlipRadialSwitch" DockPanel.Dock="Right" VerticalAlignment="Center" />
+                <TextBlock Text="{DynamicResource S.Polar.FlipRadial}" VerticalAlignment="Center" />
+              </DockPanel>
+            </StackPanel>
+          </Flyout>
+        </Button.Flyout>
+      </Button>
+      <Panel />
+    </DockPanel>
+  </Border>
+</UserControl>

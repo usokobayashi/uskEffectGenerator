@@ -1,0 +1,141 @@
+<!-- 部品をまとめない小さな見た目と、全体の既定 -->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <Style Selector="Window">
+    <Setter Property="Background" Value="{StaticResource Ue.Ground}" />
+    <Setter Property="Foreground" Value="{StaticResource Ue.Text}" />
+    <Setter Property="FontFamily" Value="{StaticResource Ue.Font}" />
+    <Setter Property="FontSize" Value="{StaticResource Ue.FontSize}" />
+  </Style>
+
+  <!-- 枠はキーボード操作のときだけ出す (Avalonia の FocusAdorner は focus-visible のときだけ表示される) -->
+  <Style Selector=":is(Control)">
+    <Setter Property="FocusAdorner">
+      <FocusAdornerTemplate>
+        <Border BorderThickness="{StaticResource Ue.Ring}" BorderBrush="{StaticResource Ue.Accent}"
+                CornerRadius="{StaticResource Ue.Radius}" Margin="-1" />
+      </FocusAdornerTemplate>
+    </Setter>
+  </Style>
+
+  <Style Selector="Path.stroke">
+    <Setter Property="StrokeThickness" Value="1.3" />
+    <Setter Property="StrokeLineCap" Value="Round" />
+    <Setter Property="StrokeJoin" Value="Round" />
+    <Setter Property="Stretch" Value="None" />
+    <Setter Property="RenderTransformOrigin" Value="50%,50%" />
+  </Style>
+  <!-- Path の線の色は親から継承されないので、ボタンの状態ごとに指定する -->
+  <Style Selector="Path.icon">
+    <Setter Property="Stroke" Value="{StaticResource Ue.Muted}" />
+    <Setter Property="Width" Value="{StaticResource Ue.Size.Icon}" />
+    <Setter Property="Height" Value="{StaticResource Ue.Size.Icon}" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Stroke" Duration="{StaticResource Ue.Motion.Fast}" Easing="{StaticResource Ue.Ease}" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Button:pointerover Path.icon"><Setter Property="Stroke" Value="{StaticResource Ue.Text}" /></Style>
+
+  <!-- 帯 -->
+  <Style Selector="Border.bar">
+    <Setter Property="Background" Value="{StaticResource Ue.Panel}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Ue.Line}" />
+    <Setter Property="Height" Value="{StaticResource Ue.Size.Bar}" />
+    <Setter Property="Padding" Value="{StaticResource Ue.Pad.Bar}" />
+  </Style>
+  <Style Selector="Border.sep">
+    <Setter Property="Width" Value="1" />
+    <Setter Property="Height" Value="{StaticResource Ue.Size.Separator}" />
+    <Setter Property="Background" Value="{StaticResource Ue.Line}" />
+    <Setter Property="Margin" Value="{StaticResource Ue.Margin.Separator}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!-- 文字 -->
+  <Style Selector="TextBlock.muted"><Setter Property="Foreground" Value="{StaticResource Ue.Muted}" /></Style>
+  <Style Selector="TextBlock.mono"><Setter Property="FontFamily" Value="{StaticResource Ue.Font.Mono}" /></Style>
+  <Style Selector="TextBlock.brand"><Setter Property="FontWeight" Value="Bold" /></Style>
+  <Style Selector="TextBlock.heading"><Setter Property="FontWeight" Value="Bold" /></Style>
+  <Style Selector="TextBlock.rowLabel">
+    <Setter Property="Width" Value="{StaticResource Ue.Size.RowLabel}" />
+    <Setter Property="Foreground" Value="{StaticResource Ue.Muted}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="TextBlock.ok"><Setter Property="Foreground" Value="{StaticResource Ue.Ok}" /></Style>
+  <Style Selector="TextBlock.bad"><Setter Property="Foreground" Value="{StaticResource Ue.Bad}" /></Style>
+
+  <!-- 数値欄 -->
+  <Style Selector="Border.numberField">
+    <Setter Property="Background" Value="{StaticResource Ue.Raised}" />
+    <Setter Property="CornerRadius" Value="{StaticResource Ue.Radius}" />
+    <Setter Property="Height" Value="{StaticResource Ue.Size.Field}" />
+  </Style>
+  <Style Selector="TextBox.bare">
+    <Setter Property="Background" Value="{StaticResource Ue.Transparent}" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="FontFamily" Value="{StaticResource Ue.Font.Mono}" />
+  </Style>
+
+  <!-- 「？」 -->
+  <Style Selector="Border.help">
+    <Setter Property="Width" Value="{StaticResource Ue.Size.Help}" />
+    <Setter Property="Height" Value="{StaticResource Ue.Size.Help}" />
+    <Setter Property="CornerRadius" Value="{StaticResource Ue.RadiusHelp}" />
+    <Setter Property="Background" Value="{StaticResource Ue.Ground}" />
+    <Setter Property="Margin" Value="4,0,0,0" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!-- 判定の札・レイヤー行 -->
+  <Style Selector="Border.chip">
+    <Setter Property="Background" Value="{StaticResource Ue.Ground}" />
+    <Setter Property="CornerRadius" Value="{StaticResource Ue.Radius}" />
+    <Setter Property="Padding" Value="{StaticResource Ue.Pad.Chip}" />
+  </Style>
+  <Style Selector="Border.layer">
+    <Setter Property="Background" Value="{StaticResource Ue.Raised}" />
+    <Setter Property="CornerRadius" Value="{StaticResource Ue.Radius}" />
+    <Setter Property="Height" Value="{StaticResource Ue.Size.Layer}" />
+    <Setter Property="Padding" Value="6,0" />
+    <Setter Property="BorderBrush" Value="{StaticResource Ue.Accent}" />
+    <Setter Property="BorderThickness" Value="{StaticResource Ue.Line.All}" />
+  </Style>
+
+  <!-- プレビューの枠 -->
+  <Style Selector="Border.thumbRing">
+    <Setter Property="BorderBrush" Value="{StaticResource Ue.Line}" />
+    <Setter Property="BorderThickness" Value="{StaticResource Ue.Ring}" />
+    <Setter Property="CornerRadius" Value="{StaticResource Ue.RadiusInner}" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="BorderBrush" Duration="{StaticResource Ue.Motion.Ring}" Easing="{StaticResource Ue.Ease}" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Border.thumbRing.hover"><Setter Property="BorderBrush" Value="{StaticResource Ue.Muted}" /></Style>
+  <Style Selector="Border.thumbRing.on"><Setter Property="BorderBrush" Value="{StaticResource Ue.Accent}" /></Style>
+  <Style Selector="Button.thumbLabel"><Setter Property="Foreground" Value="{StaticResource Ue.Muted}" /></Style>
+  <Style Selector="Button.thumbLabel.on"><Setter Property="Foreground" Value="{StaticResource Ue.Accent}" /></Style>
+
+  <!-- メニュー -->
+  <Style Selector="Menu > MenuItem">
+    <Setter Property="Foreground" Value="{StaticResource Ue.Muted}" />
+    <Setter Property="Height" Value="{StaticResource Ue.Size.IconButton}" />
+    <Setter Property="Padding" Value="{StaticResource Ue.Pad.Field}" />
+    <Setter Property="CornerRadius" Value="{StaticResource Ue.Radius}" />
+    <Setter Property="FontSize" Value="{StaticResource Ue.FontSize}" />
+  </Style>
+  <Style Selector="MenuItem"><Setter Property="FontSize" Value="{StaticResource Ue.FontSize}" /></Style>
+
+  <!-- 起動時のフェードイン -->
+  <Style Selector="Panel#RootPanel">
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="{StaticResource Ue.Motion.Toggle}" Easing="{StaticResource Ue.Ease}" />
+      </Transitions>
+    </Setter>
+  </Style>
+</Styles>

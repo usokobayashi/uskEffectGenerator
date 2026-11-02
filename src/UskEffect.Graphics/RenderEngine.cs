@@ -37,9 +37,12 @@ public sealed class RenderEngine : IDisposable
     private readonly string _effectShaderPath;
     private TimeSpan _lastFrameTime;
 
+    // 中央のキャンバスの周りの余白 [px]
+    private const float MainContentMargin = 12f;
+
     private readonly object _sync = new();
 
-    private SwapChainTarget? _target;
+    private readonly SwapChainTarget?[] _targets = new SwapChainTarget?[Enum.GetValues<SurfaceSlot>().Length];
     private volatile NoiseSettings _noiseSettings = new();
     private volatile bool _noiseDirty = true;
     private volatile bool _shadersDirty = true;
@@ -106,41 +109,44 @@ public sealed class RenderEngine : IDisposable
         }
     }
 
-    public void AttachWindow(IntPtr hwnd, int width, int height)
+    public void AttachSurface(SurfaceSlot slot, IntPtr hwnd, int width, int height)
     {
         lock (_sync)
         {
-            DetachWindowCore();
-            _target = new SwapChainTarget(_gpu, hwnd, width, height);
+            DetachSurfaceCore(slot);
+            _targets[(int)slot] = new SwapChainTarget(_gpu, hwnd, width, height);
         }
     }
 
-    public void DetachWindow()
+    public void DetachSurface(SurfaceSlot slot)
     {
         lock (_sync)
-            DetachWindowCore();
+            DetachSurfaceCore(slot);
     }
 
-    private void DetachWindowCore()
+    private void DetachSurfaceCore(SurfaceSlot slot)
     {
-        if (_target is null)
+        if (_targets[(int)slot] is not { } target)
             return;
         _gpu.Context.ClearState();
         _gpu.Context.Flush();
-        _target.Dispose();
-        _target = null;
+        target.Dispose();
+        _targets[(int)slot] = null;
     }
 
     public void ReloadShaders() => _shadersDirty = true;
 
-    /// <summary>1 フレーム描画する。描画先がなければ何もせず false を返す。</summary>
-    public bool RenderFrame(int viewportWidth, int viewportHeight, out RenderStats stats)
+    /// <summary>
+    /// 全ての描画先を 1 フレーム描く。sizes は SurfaceSlot の順の画素サイズ。
+    /// 描けた描画先がなければ false を返す。
+    /// </summary>
+    public bool RenderFrame(ReadOnlySpan<(int Width, int Height)> sizes, out RenderStats stats)
     {
         lock (_sync)
-            return RenderFrameCore(viewportWidth, viewportHeight, out stats);
+            return RenderFrameCore(sizes, out stats);
     }
 
-    private bool RenderFrameCore(int viewportWidth, int viewportHeight, out RenderStats stats)
+    private bool RenderFrameCore(ReadOnlySpan<(int Width, int Height)> sizes, out RenderStats stats)
     {
         if (_shadersDirty)
         {
@@ -151,11 +157,12 @@ public sealed class RenderEngine : IDisposable
             _noiseDirty = true;
         }
 
-        bool rendered = _target is not null && viewportWidth > 0 && viewportHeight > 0;
+        bool rendered = false;
+        for (int i = 0; i < _targets.Length; i++)
+            rendered |= _targets[i] is not null && sizes[i].Width > 0 && sizes[i].Height > 0;
+
         if (rendered)
         {
-            _target!.Resize(viewportWidth, viewportHeight);
-
             _timer.BeginFrame();
             if (_noiseDirty)
             {
@@ -165,32 +172,59 @@ public sealed class RenderEngine : IDisposable
                 _analysisPending = true;
                 _lastNoiseGenerated = _clock.Elapsed;
             }
+
             var now = _clock.Elapsed;
             Timeline.Advance((now - _lastFrameTime).TotalSeconds);
             _lastFrameTime = now;
 
             var preview = Preview;
-            if (preview.Mode == PreviewMode.Effect)
+            var effect = Effect;
+            var frame = EffectEvaluator.Evaluate(effect, preview, Timeline.Time, Timeline.NormalizedTime);
+            float time = (float)now.TotalSeconds;
+
+            for (int i = 0; i < _targets.Length; i++)
             {
-                var effect = Effect;
-                var frame = EffectEvaluator.Evaluate(effect, preview, Timeline.Time, Timeline.NormalizedTime);
-                _effect.Render(_target.RenderTargetView, _target.Width, _target.Height, _noise.ShaderResourceView,
-                    effect, preview.Polar, frame);
-            }
-            else
-            {
-                _preview.Render(_target, _noise.ShaderResourceView, _noise.Width, _noise.Height, preview,
-                    (float)now.TotalSeconds, _seamAnalysis);
+                if (_targets[i] is not { } target || sizes[i].Width <= 0 || sizes[i].Height <= 0)
+                    continue;
+                target.Resize(sizes[i].Width, sizes[i].Height);
+
+                var slot = (SurfaceSlot)i;
+                var mode = slot switch
+                {
+                    SurfaceSlot.Tile => PreviewMode.Tile3x3,
+                    SurfaceSlot.Polar => PreviewMode.Polar,
+                    SurfaceSlot.Effect => PreviewMode.Effect,
+                    _ => preview.Mode,
+                };
+                if (mode == PreviewMode.Effect)
+                {
+                    _effect.Render(target.RenderTargetView, target.Width, target.Height, _noise.ShaderResourceView,
+                        effect, preview.Polar, frame);
+                }
+                else
+                {
+                    _preview.Render(target, _noise.ShaderResourceView, _noise.Width, _noise.Height,
+                        preview with { Mode = mode }, time, _seamAnalysis,
+                        slot == SurfaceSlot.Main ? MainContentMargin : 0f);
+                }
             }
             _timer.EndFrame();
-            _target.Present(VSync);
+
+            // 同期待ちは最後の 1 回だけにする (描画先の数だけ待つと fps が落ちる)
+            for (int i = 1; i < _targets.Length; i++)
+            {
+                if (_targets[i] is { } thumbnail && sizes[i].Width > 0 && sizes[i].Height > 0)
+                    thumbnail.Present(false);
+            }
+            if (_targets[0] is { } main && sizes[0].Width > 0 && sizes[0].Height > 0)
+                main.Present(VSync);
             StartSeamAnalysisIfIdle();
         }
 
         var errorList = new[] { _noiseErrors, _previewErrors, _effectErrors }.Where(e => e is not null).ToList();
         string? errors = errorList.Count == 0 ? null : string.Join(Environment.NewLine, errorList);
         stats = new RenderStats(_gpu.AdapterName, _noise.Width, _noise.Height,
-            _target?.Width ?? 0, _target?.Height ?? 0,
+            _targets[0]?.Width ?? 0, _targets[0]?.Height ?? 0,
             _timer.ComputeMilliseconds, _timer.FrameMilliseconds, errors,
             _seamAnalysis, _analysisPending || _analysisTask is { IsCompleted: false });
         return rendered;
@@ -245,9 +279,10 @@ public sealed class RenderEngine : IDisposable
     {
         _watcher?.Dispose();
         _analysisTask?.Wait();
-        DetachWindow();
         lock (_sync)
         {
+            foreach (var slot in Enum.GetValues<SurfaceSlot>())
+                DetachSurfaceCore(slot);
             _timer.Dispose();
             _effect.Dispose();
             _preview.Dispose();

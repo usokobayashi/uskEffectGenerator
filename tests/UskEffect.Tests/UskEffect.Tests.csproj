@@ -12,9 +12,13 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1" />
     <!-- 書き出した PNG を Windows 標準のデコーダー (WIC) で読み戻して検証する -->
     <PackageReference Include="Vortice.Direct2D1" Version="3.8.3" />
+    <!-- 画面を使わずに UI を組み立てて描画・操作する -->
+    <PackageReference Include="Avalonia.Headless" Version="12.1.4" />
+    <PackageReference Include="Avalonia.Skia" Version="12.1.4" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\UskEffect.App\UskEffect.App.csproj" />
     <ProjectReference Include="..\..\src\UskEffect.Graphics\UskEffect.Graphics.csproj" />
     <ProjectReference Include="..\..\src\UskEffect.Core\UskEffect.Core.csproj" />
   </ItemGroup>

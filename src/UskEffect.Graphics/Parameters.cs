@@ -87,6 +87,15 @@ public sealed record PreviewSettings
     public float HeatThreshold { get; init; } = 5f;
 }
 
+/// <summary>同時に描く描画先。中央のキャンバスと、右上の 3 つのプレビュー。</summary>
+public enum SurfaceSlot
+{
+    Main = 0,
+    Tile = 1,
+    Polar = 2,
+    Effect = 3,
+}
+
 // cbuffer NoiseParams (Shaders/Noise/PeriodicNoise.hlsl) と同じレイアウト
 [StructLayout(LayoutKind.Sequential)]
 internal struct NoiseConstants
@@ -134,4 +143,9 @@ internal struct PreviewConstants
     public float MeanValueDiff;
     public float MeanGradientDiff;
     public float HeatThreshold;
+
+    public float StageR;
+    public float StageG;
+    public float StageB;
+    public float ContentMargin;
 }

@@ -19,6 +19,9 @@ cbuffer PreviewParams : register(b0)
     float  MeanValueDiff;     // 内部の隣接画素差の平均 (CPU の継ぎ目解析から)
     float  MeanGradientDiff;  // 内部の 2 階差分の平均
     float  HeatThreshold;     // 平均の何倍から色を付けるか
+
+    float3 StageColor;        // 内容の外側の色
+    float  ContentMargin;     // 内容の周りの余白 [px]
 };
 
 Texture2D<float> Source : register(t0);
@@ -42,11 +45,20 @@ VSOutput VSMain(uint vertexId : SV_VertexID)
     return o;
 }
 
-float3 Background(float2 pixel)
+// 透明を表す市松模様 (リングの外側)
+float3 Checker(float2 pixel)
 {
-    float2 cell = floor(pixel / 16.0);
-    float checker = fmod(cell.x + cell.y, 2.0);
-    return lerp(0.13, 0.17, checker).xxx;
+    float2 cell = floor(pixel / 8.0);
+    return lerp(26.0 / 255.0, 32.0 / 255.0, fmod(cell.x + cell.y, 2.0)).xxx;
+}
+
+// 内容の外側: 内容に接する 1px は枠線、それより外はステージの色
+float3 Outside(float2 local, float2 contentPixels)
+{
+    float2 overflow = max(abs(local - 0.5) - 0.5, 0.0) * contentPixels;
+    return ContentMargin > 0.0 && max(overflow.x, overflow.y) <= 1.0
+        ? float3(52.0, 58.0, 65.0) / 255.0
+        : StageColor;
 }
 
 // 極座標キャンバス → UV。規約は src/UskEffect.Graphics/PolarMapping.cs と同じ。
@@ -95,7 +107,8 @@ float4 PSMain(VSOutput input) : SV_Target
     float2 pixel = input.ScreenUV * ViewportSize;
     float tiles = ViewMode == 1 ? 3.0 : 1.0;
     float2 content = ViewMode == 2 ? max(TextureSize.x, TextureSize.y).xx : TextureSize * tiles;
-    float scale = min(ViewportSize.x / content.x, ViewportSize.y / content.y) * 0.95;
+    float2 available = max(ViewportSize - ContentMargin * 2.0, 1.0);
+    float scale = min(available.x / content.x, available.y / content.y);
     float2 local = (pixel - ViewportSize * 0.5) / (content * scale) + 0.5;
 
     float2 scroll = ScrollSpeed * Time;
@@ -103,16 +116,18 @@ float4 PSMain(VSOutput input) : SV_Target
 
     if (ViewMode == 2)
     {
+        if (any(local < 0.0) || any(local > 1.0))
+            return float4(Outside(local, content * scale), 1);
         float2 c = local * 2.0 - 1.0;
         c.y = -c.y;
         if (!PolarToUv(c, uv))
-            return float4(Background(pixel), 1);
+            return float4(Checker(pixel), 1);
         uv += scroll;
     }
     else
     {
         if (any(local < 0.0) || any(local > 1.0))
-            return float4(Background(pixel), 1);
+            return float4(Outside(local, content * scale), 1);
 
         if (ViewMode == 3)
         {

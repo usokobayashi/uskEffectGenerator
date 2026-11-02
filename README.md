@@ -12,6 +12,7 @@
 | 3 | シームレス生成・極座標検証 | 完了 |
 | 4 | エフェクトプレビュー・タイムライン | 完了 |
 | 5 | 画像出力・プロジェクト保存 | 完了 |
+| - | UI の作り直し (採用モックアップ) | 実装済み・実画面は未確認 |
 
 | 項目 | 内容 |
 |---|---|
@@ -30,6 +31,9 @@
 | 画像出力 | PNG / TGA。グレースケール 8bit・16bit (PNG のみ)・RGBA (RGB = 値)・RGBA (白 + A = 値)。外部ライブラリを使わない自前エンコーダー (PNG の圧縮は .NET 標準の ZLibStream) |
 | プロジェクト | `.uskfx` (ZIP 内の project.json、formatVersion 付き)。ノイズ・プレビュー・エフェクト・タイムライン・書き出し設定を保存。レイヤー画像は Phase 6 以降で同じ ZIP に追加する |
 | メニュー | 新規 (Ctrl+N)・開く (Ctrl+O)・保存 (Ctrl+S)・名前を付けて保存 (Ctrl+Shift+S)・画像を書き出し (Ctrl+E)。未保存の変更はタイトルに * を付け、閉じる・新規・開くの前に確認する |
+| 画面 | 上部 (メニュー・ファイル操作・生成/ペイント)、左 (道具)、中央 (表示の切り替え + キャンバス)、右上 (3×3・極座標・エフェクトのプレビュー)、右下 (ノイズ・シーム・エフェクト・レイヤーのタブ)、下部 (タイムライン・ステータス)。ペイント・レイヤー・シーム修正は無効の見た目で場所を確保 |
+| 複数プレビュー | 描画先ごとに子 HWND + スワップチェーン。同期待ちは中央の 1 回だけ |
+| 部品 | `Controls/Ui/`: 調整欄・滑るボタン群・数値欄・スイッチ・折りたたみ見出し・色見本。色と寸法と動きは `Theme/Tokens.axaml`、文言は `Locale/ja.axaml` |
 | 計測 | タイムスタンプクエリによる GPU 時間、FPS |
 
 ### ビルド・実行・テスト
@@ -73,7 +77,15 @@ src/UskEffect.Graphics/Effects/   エフェクト設定・時間補間・タイ�
 src/UskEffect.Core/Export/        PNG / TGA エンコーダーとテクスチャの書き出し
 src/UskEffect.Core/Project/       プロジェクトファイル (.uskfx)
 src/UskEffect.App/                Avalonia UI、D3DHost (NativeControlHost)、プリセット
+src/UskEffect.App/Views/          画面の部品 (TopBar・ViewStrip・NoisePanel など)
+src/UskEffect.App/Theme/          共通の定義と部品の見た目
 tests/UskEffect.Tests/            周期性・継ぎ目解析・極座標変換・エフェクト・書き出し・プロジェクトのテスト (xunit v3 / Microsoft.Testing.Platform)
+```
+
+UI テストは Avalonia.Headless で画面を使わずに動く。描画先 4 つの負荷の計測は手動で実行する (表示しない窓に描く)。
+
+```bash
+tests/UskEffect.Tests/bin/Debug/net10.0-windows/UskEffect.Tests.exe -class UskEffect.Tests.RenderBudgetTests -explicit only -showLiveOutput
 ```
 
 ### 既知の制約

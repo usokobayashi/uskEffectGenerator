@@ -2,6 +2,14 @@ using System.Runtime.InteropServices;
 
 namespace UskEffect.App.Interop;
 
+/// <summary>子 HWND 上のマウス操作の通知先。</summary>
+internal interface IHostWindowInput
+{
+    void OnPointerEntered();
+    void OnPointerExited();
+    void OnClicked();
+}
+
 /// <summary>D3D11 スワップチェーンを載せる子ウィンドウ用の最小限の Win32 API。</summary>
 internal static class Win32
 {
@@ -14,13 +22,34 @@ internal static class Win32
     private const uint CS_OWNDC = 0x0020;
     private const uint WM_PAINT = 0x000F;
     private const uint WM_ERASEBKGND = 0x0014;
+    private const uint WM_MOUSEMOVE = 0x0200;
+    private const uint WM_LBUTTONUP = 0x0202;
+    private const uint WM_MOUSELEAVE = 0x02A3;
+    private const uint TME_LEAVE = 0x00000002;
     private const int IDC_ARROW = 32512;
+    private const uint SPI_GETCLIENTAREAANIMATION = 0x1042;
 
     private delegate IntPtr WndProcDelegate(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
 
     // ネイティブ側から呼ばれるので GC されないよう保持する
     private static readonly WndProcDelegate s_wndProc = HostWndProc;
     private static bool s_classRegistered;
+
+    // 子 HWND 上のマウス入力は Avalonia に届かないので、ここで受けて通知する
+    private static readonly Dictionary<IntPtr, IHostWindowInput> s_inputs = [];
+    private static readonly HashSet<IntPtr> s_hovered = [];
+
+    public static void RegisterInput(IntPtr hwnd, IHostWindowInput input) => s_inputs[hwnd] = input;
+
+    public static void UnregisterInput(IntPtr hwnd)
+    {
+        s_inputs.Remove(hwnd);
+        s_hovered.Remove(hwnd);
+    }
+
+    /// <summary>OS のアニメーション効果の設定。取得できないときは有効として扱う。</summary>
+    public static bool AreClientAnimationsEnabled() =>
+        !SystemParametersInfo(SPI_GETCLIENTAREAANIMATION, 0, out bool enabled, 0) || enabled;
 
     public static IntPtr CreateHostWindow(IntPtr parent)
     {
@@ -63,6 +92,27 @@ internal static class Win32
             case WM_PAINT:
                 ValidateRect(hwnd, IntPtr.Zero);
                 return IntPtr.Zero;
+            case WM_MOUSEMOVE:
+                if (s_inputs.TryGetValue(hwnd, out var moved) && s_hovered.Add(hwnd))
+                {
+                    var track = new TRACKMOUSEEVENT
+                    {
+                        cbSize = (uint)Marshal.SizeOf<TRACKMOUSEEVENT>(),
+                        dwFlags = TME_LEAVE,
+                        hwndTrack = hwnd,
+                    };
+                    TrackMouseEvent(ref track);
+                    moved.OnPointerEntered();
+                }
+                return IntPtr.Zero;
+            case WM_MOUSELEAVE:
+                if (s_inputs.TryGetValue(hwnd, out var left) && s_hovered.Remove(hwnd))
+                    left.OnPointerExited();
+                return IntPtr.Zero;
+            case WM_LBUTTONUP:
+                if (s_inputs.TryGetValue(hwnd, out var clicked))
+                    clicked.OnClicked();
+                return IntPtr.Zero;
             default:
                 return DefWindowProc(hwnd, msg, wParam, lParam);
         }
@@ -84,6 +134,21 @@ internal static class Win32
         public string lpszClassName;
         public IntPtr hIconSm;
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct TRACKMOUSEEVENT
+    {
+        public uint cbSize;
+        public uint dwFlags;
+        public IntPtr hwndTrack;
+        public uint dwHoverTime;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool TrackMouseEvent(ref TRACKMOUSEEVENT track);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SystemParametersInfo(uint action, uint param, out bool value, uint winIni);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct RECT

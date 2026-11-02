@@ -8,7 +8,8 @@ namespace UskEffect.Graphics;
 /// <summary>ソーステクスチャを矩形・3x3 タイル・極座標のいずれかで描画する。</summary>
 public sealed class PreviewRenderer : IDisposable
 {
-    private static readonly Color4 ClearColor = new(0.1f, 0.1f, 0.1f, 1f);
+    // キャンバスの周りの色。UI の Ue.Stage (#111417) と同じ値
+    private static readonly Color4 StageColor = new(0x11 / 255f, 0x14 / 255f, 0x17 / 255f, 1f);
 
     private readonly GpuDevice _gpu;
     private readonly ID3D11Buffer _constantBuffer;
@@ -39,11 +40,11 @@ public sealed class PreviewRenderer : IDisposable
     }
 
     public void Render(SwapChainTarget target, ID3D11ShaderResourceView? source, int sourceWidth, int sourceHeight,
-        PreviewSettings settings, float timeSeconds, SeamAnalysis? seam)
+        PreviewSettings settings, float timeSeconds, SeamAnalysis? seam, float contentMargin)
     {
         var context = _gpu.Context;
         context.OMSetRenderTargets(target.RenderTargetView);
-        context.ClearRenderTargetView(target.RenderTargetView, ClearColor);
+        context.ClearRenderTargetView(target.RenderTargetView, StageColor);
 
         if (_vertexShader is null || _pixelShader is null || source is null)
             return;
@@ -67,6 +68,10 @@ public sealed class PreviewRenderer : IDisposable
             MeanValueDiff = (float)(seam?.MeanValueDiff ?? 1.0),
             MeanGradientDiff = (float)(seam?.MeanGradientDiff ?? 1.0),
             HeatThreshold = Math.Max(1f, settings.HeatThreshold),
+            StageR = StageColor.R,
+            StageG = StageColor.G,
+            StageB = StageColor.B,
+            ContentMargin = contentMargin,
         };
         context.UpdateSubresource(constants, _constantBuffer);
 

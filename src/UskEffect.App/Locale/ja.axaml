@@ -1,0 +1,191 @@
+<!-- 文言。画面とコードはキーで参照する。XAML は DynamicResource、コードは Loc.T -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <x:String x:Key="S.App.Name">uskEffect</x:String>
+  <x:String x:Key="S.App.Untitled">無題</x:String>
+
+  <!-- メニュー -->
+  <x:String x:Key="S.Menu.File">ファイル(_F)</x:String>
+  <x:String x:Key="S.Menu.New">新規(_N)</x:String>
+  <x:String x:Key="S.Menu.Open">開く(_O)...</x:String>
+  <x:String x:Key="S.Menu.Save">保存(_S)</x:String>
+  <x:String x:Key="S.Menu.SaveAs">名前を付けて保存(_A)...</x:String>
+  <x:String x:Key="S.Menu.Export">画像を書き出し(_E)...</x:String>
+  <x:String x:Key="S.Menu.Exit">終了(_X)</x:String>
+  <x:String x:Key="S.Menu.Edit">編集(_E)</x:String>
+  <x:String x:Key="S.Menu.Undo">元に戻す(_U)</x:String>
+  <x:String x:Key="S.Menu.Redo">やり直す(_R)</x:String>
+  <x:String x:Key="S.Menu.View">表示(_V)</x:String>
+  <x:String x:Key="S.Menu.Help">ヘルプ(_H)</x:String>
+  <x:String x:Key="S.Menu.About">uskEffect について(_A)</x:String>
+  <x:String x:Key="S.About.Body">ゲームエフェクト向けテクスチャ制作補助ソフト</x:String>
+
+  <!-- 上部 -->
+  <x:String x:Key="S.Top.Open">開く</x:String>
+  <x:String x:Key="S.Top.Save">保存</x:String>
+  <x:String x:Key="S.Top.Export">書き出し</x:String>
+  <x:String x:Key="S.Top.Undo">元に戻す</x:String>
+  <x:String x:Key="S.Top.Redo">やり直す</x:String>
+  <x:String x:Key="S.Mode.Generate">生成</x:String>
+  <x:String x:Key="S.Mode.Paint">ペイント</x:String>
+  <x:String x:Key="S.Common.NotYet">今後の更新で使えるようになります。</x:String>
+
+  <!-- 書き出し -->
+  <x:String x:Key="S.Export.Channels">チャンネル</x:String>
+  <x:String x:Key="S.Export.Gray8">グレースケール 8bit</x:String>
+  <x:String x:Key="S.Export.Gray16">グレースケール 16bit（PNG のみ）</x:String>
+  <x:String x:Key="S.Export.RgbaOpaque">RGBA（RGB = 値、A = 255）</x:String>
+  <x:String x:Key="S.Export.RgbaWhiteAlpha">RGBA（RGB = 白、A = 値）</x:String>
+  <x:String x:Key="S.Export.Run">書き出し...</x:String>
+  <x:String x:Key="S.Export.Title">画像を書き出し</x:String>
+  <x:String x:Key="S.Export.Done">書き出しました: {0}</x:String>
+  <x:String x:Key="S.Export.Failed">書き出せません</x:String>
+  <x:String x:Key="S.Export.Gray16PngOnly">グレースケール 16bit は PNG でのみ書き出せます。</x:String>
+  <x:String x:Key="S.Export.DefaultName">noise</x:String>
+  <x:String x:Key="S.FileType.Project">uskEffect プロジェクト</x:String>
+  <x:String x:Key="S.FileType.Png">PNG 画像</x:String>
+  <x:String x:Key="S.FileType.Tga">TGA 画像</x:String>
+
+  <!-- プロジェクト -->
+  <x:String x:Key="S.Project.OpenTitle">プロジェクトを開く</x:String>
+  <x:String x:Key="S.Project.SaveTitle">プロジェクトを保存</x:String>
+  <x:String x:Key="S.Project.OpenFailed">開けません</x:String>
+  <x:String x:Key="S.Project.SaveFailed">保存できません</x:String>
+  <x:String x:Key="S.Project.Saved">保存しました: {0}</x:String>
+
+  <!-- ダイアログ -->
+  <x:String x:Key="S.Dialog.UnsavedTitle">未保存の変更</x:String>
+  <x:String x:Key="S.Dialog.UnsavedBody">「{0}」への変更を保存しますか？</x:String>
+  <x:String x:Key="S.Dialog.Save">保存する</x:String>
+  <x:String x:Key="S.Dialog.Discard">保存しない</x:String>
+  <x:String x:Key="S.Dialog.Cancel">キャンセル</x:String>
+  <x:String x:Key="S.Dialog.Ok">OK</x:String>
+
+  <!-- 道具 -->
+  <x:String x:Key="S.Tool.Brush">ブラシ</x:String>
+  <x:String x:Key="S.Tool.Eraser">消しゴム</x:String>
+  <x:String x:Key="S.Tool.Blur">ぼかし</x:String>
+  <x:String x:Key="S.Tool.Smudge">指先</x:String>
+  <x:String x:Key="S.Tool.Picker">スポイト</x:String>
+  <x:String x:Key="S.Tool.Fill">塗りつぶし</x:String>
+  <x:String x:Key="S.Tool.Move">移動</x:String>
+
+  <!-- 表示 -->
+  <x:String x:Key="S.View.Rect">矩形</x:String>
+  <x:String x:Key="S.View.Tile">3×3</x:String>
+  <x:String x:Key="S.View.Polar">極座標</x:String>
+  <x:String x:Key="S.View.Seam">シーム</x:String>
+  <x:String x:Key="S.View.Effect">エフェクト</x:String>
+  <x:String x:Key="S.Polar.Summary">内外径 {0:0.00}–{1:0.00}</x:String>
+  <x:String x:Key="S.Polar.Inner">内径</x:String>
+  <x:String x:Key="S.Polar.Outer">外径</x:String>
+  <x:String x:Key="S.Polar.Rotation">回転</x:String>
+  <x:String x:Key="S.Polar.FlipAngular">角度方向を反転</x:String>
+  <x:String x:Key="S.Polar.FlipRadial">内外を反転</x:String>
+
+  <!-- タブ -->
+  <x:String x:Key="S.Tab.Noise">ノイズ</x:String>
+  <x:String x:Key="S.Tab.Seam">シーム</x:String>
+  <x:String x:Key="S.Tab.Effect">エフェクト</x:String>
+  <x:String x:Key="S.Tab.Layer">レイヤー</x:String>
+
+  <!-- ノイズ -->
+  <x:String x:Key="S.Noise.Preset">プリセット</x:String>
+  <x:String x:Key="S.Noise.PresetPlaceholder">自分で調整した値</x:String>
+  <x:String x:Key="S.Noise.PresetBuiltIn">{0}（標準）</x:String>
+  <x:String x:Key="S.Noise.PresetSave">保存</x:String>
+  <x:String x:Key="S.Noise.PresetDelete">削除</x:String>
+  <x:String x:Key="S.Noise.PresetName">保存する名前</x:String>
+  <x:String x:Key="S.Noise.PresetSaved">「{0}」を保存しました。</x:String>
+  <x:String x:Key="S.Noise.PresetDeleted">「{0}」を削除しました。</x:String>
+  <x:String x:Key="S.Noise.PresetSaveFailed">保存できません: {0}</x:String>
+  <x:String x:Key="S.Noise.PresetDeleteFailed">削除できません: {0}</x:String>
+  <x:String x:Key="S.Noise.Type">種類</x:String>
+  <x:String x:Key="S.Noise.Fractal">合成</x:String>
+  <x:String x:Key="S.Noise.Worley">Worley</x:String>
+  <x:String x:Key="S.Noise.Seamless">シームレス</x:String>
+  <x:String x:Key="S.Noise.Seed">Seed</x:String>
+  <x:String x:Key="S.Noise.Resolution">解像度</x:String>
+  <x:String x:Key="S.Noise.Shape">形状</x:String>
+  <x:String x:Key="S.Noise.Tone">階調</x:String>
+  <x:String x:Key="S.Noise.Frequency">Frequency</x:String>
+  <x:String x:Key="S.Noise.Octaves">Octaves</x:String>
+  <x:String x:Key="S.Noise.Persistence">Persistence</x:String>
+  <x:String x:Key="S.Noise.Lacunarity">Lacunarity</x:String>
+  <x:String x:Key="S.Noise.Warp">ドメインワープ</x:String>
+  <x:String x:Key="S.Noise.WarpHelp">別のノイズで座標をずらして、流れるような形にします。同じ周期のノイズを使うので、シームレスのまま変形できます。</x:String>
+  <x:String x:Key="S.Noise.Contrast">コントラスト</x:String>
+  <x:String x:Key="S.Noise.Brightness">明るさ</x:String>
+  <x:String x:Key="S.Noise.Invert">反転</x:String>
+
+  <!-- シーム -->
+  <x:String x:Key="S.Seam.Analyzing">解析中...</x:String>
+  <x:String x:Key="S.Seam.None">継ぎ目なし</x:String>
+  <x:String x:Key="S.Seam.Found">継ぎ目あり</x:String>
+  <x:String x:Key="S.Seam.Updating">（更新中）</x:String>
+  <x:String x:Key="S.Seam.Detail">左右 値 {0:0.00}×  勾配 {1:0.00}×&#10;上下 値 {2:0.00}×  勾配 {3:0.00}×&#10;基準 値 &lt; {4:0.0}×  勾配 &lt; {5:0.0}×</x:String>
+  <x:String x:Key="S.Seam.Overlay">重ね表示</x:String>
+  <x:String x:Key="S.Seam.OverlayOff">なし</x:String>
+  <x:String x:Key="S.Seam.OverlayValue">値の差分</x:String>
+  <x:String x:Key="S.Seam.OverlayGradient">勾配の差分</x:String>
+  <x:String x:Key="S.Seam.Threshold">しきい値</x:String>
+  <x:String x:Key="S.Seam.Fix">シーム修正</x:String>
+  <x:String x:Key="S.Seam.FixOffset">オフセット表示</x:String>
+  <x:String x:Key="S.Seam.FixBlend">自動ブレンド</x:String>
+  <x:String x:Key="S.Seam.FixNote">既存画像の読み込みと一緒に使えるようになります。</x:String>
+
+  <!-- エフェクト -->
+  <x:String x:Key="S.Effect.Blend">合成</x:String>
+  <x:String x:Key="S.Effect.Mapping">貼り方</x:String>
+  <x:String x:Key="S.Effect.MappingRect">矩形</x:String>
+  <x:String x:Key="S.Effect.MappingPolar">極座標</x:String>
+  <x:String x:Key="S.Effect.Background">背景</x:String>
+  <x:String x:Key="S.Effect.BgChecker">市松</x:String>
+  <x:String x:Key="S.Effect.BgBlack">黒</x:String>
+  <x:String x:Key="S.Effect.BgGray">灰</x:String>
+  <x:String x:Key="S.Effect.SoftMask">円形ソフトマスク（矩形のみ）</x:String>
+  <x:String x:Key="S.Effect.TextureAsAlpha">テクスチャの値をアルファに使う</x:String>
+  <x:String x:Key="S.Effect.Motion">動き</x:String>
+  <x:String x:Key="S.Effect.ScrollU">UV 移動 U</x:String>
+  <x:String x:Key="S.Effect.ScrollV">UV 移動 V</x:String>
+  <x:String x:Key="S.Effect.Rotation">回転</x:String>
+  <x:String x:Key="S.Effect.Scale">拡縮</x:String>
+  <x:String x:Key="S.Effect.Look">見た目</x:String>
+  <x:String x:Key="S.Effect.Alpha">アルファ</x:String>
+  <x:String x:Key="S.Effect.Color">色</x:String>
+  <x:String x:Key="S.Effect.Dissolve">ディゾルブ</x:String>
+  <x:String x:Key="S.Effect.EdgeWidth">ディゾルブ境界</x:String>
+  <x:String x:Key="S.Effect.EdgeColor">発光色</x:String>
+  <x:String x:Key="S.Effect.Start">開始</x:String>
+  <x:String x:Key="S.Effect.End">終了</x:String>
+
+  <!-- レイヤー -->
+  <x:String x:Key="S.Layer.Noise">ノイズ（生成）</x:String>
+  <x:String x:Key="S.Layer.ToggleVisible">ノイズの表示切替</x:String>
+  <x:String x:Key="S.Layer.Add">追加</x:String>
+  <x:String x:Key="S.Layer.Delete">削除</x:String>
+  <x:String x:Key="S.Layer.Note">レイヤーはペイント機能と一緒に使えるようになります。</x:String>
+
+  <!-- タイムライン -->
+  <x:String x:Key="S.Timeline.Play">再生</x:String>
+  <x:String x:Key="S.Timeline.Pause">一時停止</x:String>
+  <x:String x:Key="S.Timeline.Stop">停止</x:String>
+  <x:String x:Key="S.Timeline.Position">再生位置</x:String>
+  <x:String x:Key="S.Timeline.Loop">ループ</x:String>
+  <x:String x:Key="S.Timeline.Duration">長さ</x:String>
+  <x:String x:Key="S.Timeline.DurationAria">長さ（秒）</x:String>
+  <x:String x:Key="S.Timeline.Time">{0:0.00} / {1:0.00} s</x:String>
+
+  <!-- ステータス -->
+  <x:String x:Key="S.Status.Starting">GPU 初期化中...</x:String>
+  <x:String x:Key="S.Status.GpuFailed">GPU 初期化失敗: {0}</x:String>
+  <x:String x:Key="S.Status.RenderFailed">描画エラー: {0}</x:String>
+  <x:String x:Key="S.Status.ReloadShaders">シェーダー再読込</x:String>
+  <x:String x:Key="S.Status.ShaderFolder">シェーダーのフォルダ: {0}</x:String>
+  <x:String x:Key="S.Status.ShaderErrors">シェーダーエラー</x:String>
+  <x:String x:Key="S.Status.VSyncOn">VSync ON</x:String>
+  <x:String x:Key="S.Status.VSyncOff">VSync OFF</x:String>
+  <x:String x:Key="S.Status.Viewport">キャンバス {0}×{1} px</x:String>
+  <x:String x:Key="S.Common.Decrease">減らす</x:String>
+  <x:String x:Key="S.Common.Increase">増やす</x:String>
+</ResourceDictionary>

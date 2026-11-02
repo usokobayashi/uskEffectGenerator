@@ -1,0 +1,92 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="using:UskEffect.App.Controls.Ui"
+             x:Class="UskEffect.App.Views.NoisePanel">
+  <StackPanel Spacing="{StaticResource Ue.Gap.Row}">
+    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="{StaticResource Ue.Gap.Normal}">
+      <TextBlock Classes="rowLabel" Text="{DynamicResource S.Noise.Preset}" />
+      <ComboBox x:Name="PresetBox" Grid.Column="1" PlaceholderText="{DynamicResource S.Noise.PresetPlaceholder}" />
+      <Button Grid.Column="2" Classes="btn" Content="{DynamicResource S.Noise.PresetSave}">
+        <Button.Flyout>
+          <Flyout Placement="BottomEdgeAlignedRight">
+            <StackPanel Width="{StaticResource Ue.Size.PolarPopup}" Spacing="{StaticResource Ue.Gap.Row}">
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{StaticResource Ue.Gap.Line}">
+                <TextBox x:Name="PresetNameBox" PlaceholderText="{DynamicResource S.Noise.PresetName}" Background="{StaticResource Ue.Ground}" />
+                <Button x:Name="SavePresetButton" Grid.Column="1" Classes="btn" Content="{DynamicResource S.Noise.PresetSave}" />
+              </Grid>
+              <Button x:Name="DeletePresetButton" Classes="btn" Content="{DynamicResource S.Noise.PresetDelete}" HorizontalAlignment="Right" />
+              <TextBlock x:Name="PresetMessage" Classes="muted" TextWrapping="Wrap" IsVisible="False" />
+            </StackPanel>
+          </Flyout>
+        </Button.Flyout>
+      </Button>
+    </Grid>
+
+    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{StaticResource Ue.Gap.Normal}">
+      <TextBlock Classes="rowLabel" Text="{DynamicResource S.Noise.Type}" />
+      <ui:SegmentedControl x:Name="TypeSegment" Grid.Column="1" SelectedIndex="0">
+        <ListBoxItem Content="Perlin" Padding="2,0" />
+        <ListBoxItem Content="Worley" Padding="2,0" />
+        <ListBoxItem Content="Simplex" Padding="2,0" />
+      </ui:SegmentedControl>
+    </Grid>
+    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{StaticResource Ue.Gap.Normal}">
+      <TextBlock Classes="rowLabel" Text="{DynamicResource S.Noise.Fractal}" />
+      <ui:SegmentedControl x:Name="FractalSegment" Grid.Column="1" SelectedIndex="0">
+        <ListBoxItem Content="FBM" Padding="2,0" />
+        <ListBoxItem Content="Ridged" Padding="2,0" />
+        <ListBoxItem Content="Turbulence" Padding="2,0" />
+      </ui:SegmentedControl>
+    </Grid>
+    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{StaticResource Ue.Gap.Normal}">
+      <TextBlock Classes="rowLabel" Text="{DynamicResource S.Noise.Worley}" />
+      <ui:SegmentedControl x:Name="WorleySegment" Grid.Column="1" SelectedIndex="0">
+        <ListBoxItem Content="F1" Padding="2,0" />
+        <ListBoxItem Content="F2" Padding="2,0" />
+        <ListBoxItem Content="F2-F1" Padding="2,0" />
+      </ui:SegmentedControl>
+    </Grid>
+    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{StaticResource Ue.Gap.Normal}">
+      <TextBlock Classes="rowLabel" Text="{DynamicResource S.Noise.Seamless}" />
+      <ui:SegmentedControl x:Name="SeamSegment" Grid.Column="1" SelectedIndex="3">
+        <ListBoxItem Content="OFF" Padding="2,0" />
+        <ListBoxItem Content="X" Padding="2,0" />
+        <ListBoxItem Content="Y" Padding="2,0" />
+        <ListBoxItem Content="XY" Padding="2,0" />
+      </ui:SegmentedControl>
+    </Grid>
+
+    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{StaticResource Ue.Gap.Normal}">
+      <TextBlock Classes="rowLabel" Text="{DynamicResource S.Noise.Seed}" />
+      <ui:NumberField x:Name="SeedField" Grid.Column="1" Minimum="0" Maximum="999999" Value="1" AutomationProperties.Name="{DynamicResource S.Noise.Seed}" />
+    </Grid>
+    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{StaticResource Ue.Gap.Normal}">
+      <TextBlock Classes="rowLabel" Text="{DynamicResource S.Noise.Resolution}" TextWrapping="Wrap" />
+      <ComboBox x:Name="ResolutionBox" Grid.Column="1" SelectedIndex="1">
+        <ComboBoxItem Content="256" />
+        <ComboBoxItem Content="512" />
+        <ComboBoxItem Content="1024" />
+        <ComboBoxItem Content="2048" />
+      </ComboBox>
+    </Grid>
+
+    <ui:SectionHeader x:Name="ShapeHeader" Content="{DynamicResource S.Noise.Shape}" />
+    <StackPanel Spacing="{StaticResource Ue.Gap.Row}" IsVisible="{Binding #ShapeHeader.IsChecked}" x:CompileBindings="False">
+      <ui:SliderField x:Name="FrequencyField" Label="{DynamicResource S.Noise.Frequency}" Minimum="1" Maximum="32" Value="4" Step="1" ValueFormat="0" />
+      <ui:SliderField x:Name="OctavesField" Label="{DynamicResource S.Noise.Octaves}" Minimum="1" Maximum="8" Value="5" Step="1" ValueFormat="0" />
+      <ui:SliderField x:Name="PersistenceField" Label="{DynamicResource S.Noise.Persistence}" Minimum="0" Maximum="1" Value="0.5" Step="0.01" />
+      <ui:SliderField x:Name="LacunarityField" Label="{DynamicResource S.Noise.Lacunarity}" Minimum="2" Maximum="4" Value="2" Step="1" ValueFormat="0" />
+      <ui:SliderField x:Name="WarpField" Label="{DynamicResource S.Noise.Warp}" HelpText="{DynamicResource S.Noise.WarpHelp}" Minimum="0" Maximum="0.5" Value="0" Step="0.01" />
+    </StackPanel>
+
+    <ui:SectionHeader x:Name="ToneHeader" Content="{DynamicResource S.Noise.Tone}" />
+    <StackPanel Spacing="{StaticResource Ue.Gap.Row}" IsVisible="{Binding #ToneHeader.IsChecked}" x:CompileBindings="False">
+      <ui:SliderField x:Name="ContrastField" Label="{DynamicResource S.Noise.Contrast}" Minimum="0" Maximum="3" Value="1" Step="0.01" />
+      <ui:SliderField x:Name="BrightnessField" Label="{DynamicResource S.Noise.Brightness}" Minimum="-1" Maximum="1" Value="0" Step="0.01" ValueFormat="+0.00;-0.00;0.00" />
+      <DockPanel MinHeight="{StaticResource Ue.Size.Field}">
+        <ui:SwitchButton x:Name="InvertSwitch" DockPanel.Dock="Right" VerticalAlignment="Center" AutomationProperties.Name="{DynamicResource S.Noise.Invert}" />
+        <TextBlock Text="{DynamicResource S.Noise.Invert}" VerticalAlignment="Center" />
+      </DockPanel>
+    </StackPanel>
+  </StackPanel>
+</UserControl>

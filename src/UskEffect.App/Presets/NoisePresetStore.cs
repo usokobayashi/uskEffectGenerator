@@ -2,13 +2,14 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Unicode;
+using UskEffect.App.Locale;
 using UskEffect.Graphics;
 
 namespace UskEffect.App.Presets;
 
 public sealed record NoisePreset(string Name, NoiseSettings Settings, bool IsBuiltIn = false)
 {
-    public string DisplayName => IsBuiltIn ? $"{Name}（標準）" : Name;
+    public string DisplayName => IsBuiltIn ? Loc.F("S.Noise.PresetBuiltIn", Name) : Name;
 }
 
 /// <summary>

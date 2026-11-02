@@ -1,0 +1,79 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="using:UskEffect.App.Controls.Ui"
+             x:Class="UskEffect.App.Views.TopBar">
+  <Border Classes="bar" BorderThickness="{StaticResource Ue.Line.Bottom}">
+    <DockPanel>
+      <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="{StaticResource Ue.Gap.Tight}" VerticalAlignment="Center">
+        <TextBlock Classes="brand" Text="{DynamicResource S.App.Name}" VerticalAlignment="Center" Margin="0,0,8,0" />
+        <Menu Background="{StaticResource Ue.Transparent}">
+          <MenuItem Header="{DynamicResource S.Menu.File}">
+            <MenuItem x:Name="NewMenuItem" Header="{DynamicResource S.Menu.New}" InputGesture="Ctrl+N" HotKey="Ctrl+N" />
+            <MenuItem x:Name="OpenMenuItem" Header="{DynamicResource S.Menu.Open}" InputGesture="Ctrl+O" HotKey="Ctrl+O" />
+            <Separator />
+            <MenuItem x:Name="SaveMenuItem" Header="{DynamicResource S.Menu.Save}" InputGesture="Ctrl+S" HotKey="Ctrl+S" />
+            <MenuItem x:Name="SaveAsMenuItem" Header="{DynamicResource S.Menu.SaveAs}" InputGesture="Ctrl+Shift+S" HotKey="Ctrl+Shift+S" />
+            <Separator />
+            <MenuItem x:Name="ExportMenuItem" Header="{DynamicResource S.Menu.Export}" InputGesture="Ctrl+E" HotKey="Ctrl+E" />
+            <Separator />
+            <MenuItem x:Name="ExitMenuItem" Header="{DynamicResource S.Menu.Exit}" />
+          </MenuItem>
+          <MenuItem Header="{DynamicResource S.Menu.Edit}">
+            <MenuItem Header="{DynamicResource S.Menu.Undo}" InputGesture="Ctrl+Z" IsEnabled="False" />
+            <MenuItem Header="{DynamicResource S.Menu.Redo}" InputGesture="Ctrl+Y" IsEnabled="False" />
+          </MenuItem>
+          <MenuItem Header="{DynamicResource S.Menu.View}">
+            <MenuItem x:Name="ViewRectMenuItem" Header="{DynamicResource S.View.Rect}" />
+            <MenuItem x:Name="ViewTileMenuItem" Header="{DynamicResource S.View.Tile}" />
+            <MenuItem x:Name="ViewPolarMenuItem" Header="{DynamicResource S.View.Polar}" />
+            <MenuItem x:Name="ViewSeamMenuItem" Header="{DynamicResource S.View.Seam}" />
+            <MenuItem x:Name="ViewEffectMenuItem" Header="{DynamicResource S.View.Effect}" />
+          </MenuItem>
+          <MenuItem Header="{DynamicResource S.Menu.Help}">
+            <MenuItem x:Name="AboutMenuItem" Header="{DynamicResource S.Menu.About}" />
+          </MenuItem>
+        </Menu>
+        <Border Classes="sep" />
+        <Button x:Name="OpenButton" Classes="ico" ToolTip.Tip="{DynamicResource S.Top.Open}" AutomationProperties.Name="{DynamicResource S.Top.Open}">
+          <Path Classes="stroke icon" Data="{StaticResource Icon.Open}" />
+        </Button>
+        <Button x:Name="SaveButton" Classes="ico" ToolTip.Tip="{DynamicResource S.Top.Save}" AutomationProperties.Name="{DynamicResource S.Top.Save}">
+          <Path Classes="stroke icon" Data="{StaticResource Icon.Save}" />
+        </Button>
+        <Button x:Name="ExportButton" Classes="ico" ToolTip.Tip="{DynamicResource S.Top.Export}" AutomationProperties.Name="{DynamicResource S.Top.Export}">
+          <Path Classes="stroke icon" Data="{StaticResource Icon.Export}" />
+          <Button.Flyout>
+            <Flyout Placement="BottomEdgeAlignedLeft">
+              <StackPanel Width="{StaticResource Ue.Size.PolarPopup}" Spacing="{StaticResource Ue.Gap.Row}">
+                <TextBlock Classes="muted" Text="{DynamicResource S.Export.Channels}" />
+                <ComboBox x:Name="ExportChannelsBox" SelectedIndex="0">
+                  <ComboBoxItem Content="{DynamicResource S.Export.Gray8}" />
+                  <ComboBoxItem Content="{DynamicResource S.Export.Gray16}" />
+                  <ComboBoxItem Content="{DynamicResource S.Export.RgbaOpaque}" />
+                  <ComboBoxItem Content="{DynamicResource S.Export.RgbaWhiteAlpha}" />
+                </ComboBox>
+                <Button x:Name="ExportRunButton" Classes="btn" Content="{DynamicResource S.Export.Run}" HorizontalAlignment="Right" />
+              </StackPanel>
+            </Flyout>
+          </Button.Flyout>
+        </Button>
+        <Button Classes="ico" IsEnabled="False" ToolTip.Tip="{DynamicResource S.Top.Undo}" AutomationProperties.Name="{DynamicResource S.Top.Undo}">
+          <Path Classes="stroke icon" Data="{StaticResource Icon.Undo}" />
+        </Button>
+        <Button Classes="ico" IsEnabled="False" ToolTip.Tip="{DynamicResource S.Top.Redo}" AutomationProperties.Name="{DynamicResource S.Top.Redo}">
+          <Path Classes="stroke icon" Data="{StaticResource Icon.Redo}" />
+        </Button>
+      </StackPanel>
+
+      <ui:SegmentedControl x:Name="ModeSegment" DockPanel.Dock="Right" Width="{StaticResource Ue.Size.ModeSegment}"
+                           VerticalAlignment="Center" SelectedIndex="0">
+        <ListBoxItem Content="{DynamicResource S.Mode.Generate}" />
+        <ListBoxItem Content="{DynamicResource S.Mode.Paint}" IsEnabled="False" ToolTip.Tip="{DynamicResource S.Common.NotYet}" />
+      </ui:SegmentedControl>
+
+      <TextBlock x:Name="ProjectNameText" DockPanel.Dock="Right" Classes="muted" VerticalAlignment="Center"
+                 MaxWidth="{StaticResource Ue.Size.ProjectName}" Margin="8,0,10,0" TextTrimming="CharacterEllipsis" />
+      <Panel />
+    </DockPanel>
+  </Border>
+</UserControl>

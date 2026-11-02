@@ -1,8 +1,9 @@
 using System.Diagnostics;
+using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
 using Avalonia.Threading;
-using UskEffect.App.Presets;
+using UskEffect.App.Controls;
+using UskEffect.App.Locale;
 using UskEffect.Graphics;
 using UskEffect.Graphics.Analysis;
 using UskEffect.Graphics.Effects;
@@ -11,20 +12,21 @@ namespace UskEffect.App;
 
 public partial class MainWindow : Window
 {
-    private static readonly int[] Resolutions = [256, 512, 1024, 2048];
+    // 右パネルを狭くする窓の幅
+    private const double NarrowWindowWidth = 1000;
 
     private readonly RenderEngine? _engine;
-    private readonly NoisePresetStore _presets = new();
+    private readonly D3DHost[] _hosts;
     private Thread? _renderThread;
-    private readonly DispatcherTimer _timelineTimer = new() { Interval = TimeSpan.FromMilliseconds(33) };
-    private bool _updatingTimeline;
     private bool _suppressApply;
-    private string? _shownErrors;
     private volatile bool _closed;
 
     public MainWindow()
     {
         InitializeComponent();
+
+        // SurfaceSlot の順
+        _hosts = [Viewport, TileThumb.Host, PolarThumb.Host, EffectThumb.Host];
 
         try
         {
@@ -32,57 +34,73 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"GPU 初期化失敗: {ex.Message}";
+            Status.ShowFailure(Loc.F("S.Status.GpuFailed", ex.Message));
+            RootPanel.Opacity = 1;
             return;
         }
 
-        ShaderDirText.Text = _engine.ShaderDirectory;
-
-        Viewport.HwndCreated += hwnd =>
+        for (int i = 0; i < _hosts.Length; i++)
         {
-            var (w, h) = Viewport.PixelSize;
-            _engine.AttachWindow(hwnd, w, h);
-        };
-        Viewport.HwndDestroying += () => _engine.DetachWindow();
+            var slot = (SurfaceSlot)i;
+            var host = _hosts[i];
+            host.HwndCreated += hwnd =>
+            {
+                var (w, h) = host.PixelSize;
+                _engine.AttachSurface(slot, hwnd, w, h);
+            };
+            host.HwndDestroying += () => _engine.DetachSurface(slot);
+        }
 
-        foreach (var slider in new RangeBase[]
-                 {
-                     FrequencySlider, OctavesSlider, PersistenceSlider, LacunaritySlider, WarpSlider, ContrastSlider,
-                     BrightnessSlider, InnerRadiusSlider, OuterRadiusSlider, RotationSlider, HeatThresholdSlider,
-                     ScrollUSlider, ScrollVSlider,
-                 })
-            slider.ValueChanged += (_, _) => ApplySettings();
-        foreach (var combo in new[] { NoiseTypeBox, WorleyModeBox, FractalBox, ResolutionBox, SeamBox, ViewModeBox, HeatmapBox })
-            combo.SelectionChanged += (_, _) => ApplySettings();
-        SeedBox.ValueChanged += (_, _) => ApplySettings();
-        foreach (var check in new[] { InvertBox, FlipAngularBox, FlipRadialBox })
-            check.IsCheckedChanged += (_, _) => ApplySettings();
-        // VSync はプロジェクトに含めない表示設定なので、未保存の変更として扱わない
-        VSyncBox.IsCheckedChanged += (_, _) => _engine.VSync = VSyncBox.IsChecked == true;
-        ReloadButton.Click += (_, _) => _engine.ReloadShaders();
+        NoiseTab.Changed += ApplySettings;
+        SeamTab.Changed += ApplySettings;
+        EffectTab.Changed += ApplySettings;
+        Strip.Changed += ApplySettings;
+        Timeline.Attach(_engine.Timeline);
+        Timeline.Changed += MarkDirty;
 
-        EffectSettingsPanel.Changed += ApplySettings;
-        SetUpTimeline(_engine.Timeline);
+        TabSegment.SelectionChanged += (_, _) => ShowTab(TabSegment.SelectedIndex);
+        TileThumb.Clicked += () => Strip.Mode = PreviewMode.Tile3x3;
+        PolarThumb.Clicked += () => Strip.Mode = PreviewMode.Polar;
+        EffectThumb.Clicked += () => Strip.Mode = PreviewMode.Effect;
+        Top.ViewRectMenuItem.Click += (_, _) => Strip.Mode = PreviewMode.Rect;
+        Top.ViewTileMenuItem.Click += (_, _) => Strip.Mode = PreviewMode.Tile3x3;
+        Top.ViewPolarMenuItem.Click += (_, _) => Strip.Mode = PreviewMode.Polar;
+        Top.ViewSeamMenuItem.Click += (_, _) => Strip.Mode = PreviewMode.SeamCheck;
+        Top.ViewEffectMenuItem.Click += (_, _) => Strip.Mode = PreviewMode.Effect;
 
-        PresetBox.SelectionChanged += (_, _) => OnPresetSelected();
-        SavePresetButton.Click += (_, _) => SavePreset();
-        DeletePresetButton.Click += (_, _) => DeletePreset();
-        RefreshPresetList(null);
+        Status.ReloadButton.Click += (_, _) => _engine.ReloadShaders();
+        ToolTip.SetTip(Status.ReloadButton, Loc.F("S.Status.ShaderFolder", _engine.ShaderDirectory));
+        Status.VSyncChanged += vsync => _engine.VSync = vsync;
+
+        SizeChanged += (_, e) => RightPanel.Width = ResourceDouble(
+            e.NewSize.Width < NarrowWindowWidth ? "Ue.Size.RightPanelNarrow" : "Ue.Size.RightPanel");
 
         ApplySettings();
         SetUpProjectCommands();
         Opened += (_, _) =>
         {
+            RootPanel.Opacity = 1;
             _renderThread = new Thread(RenderLoop) { IsBackground = true, Name = "uskEffect Render" };
             _renderThread.Start();
         };
         Closed += (_, _) =>
         {
             _closed = true;
-            _timelineTimer.Stop();
+            Timeline.Stop();
             _renderThread?.Join();
             _engine.Dispose();
         };
+    }
+
+    private static double ResourceDouble(string key) =>
+        Application.Current!.TryGetResource(key, null, out var value) && value is double d ? d : 0;
+
+    private void ShowTab(int index)
+    {
+        NoiseTab.IsVisible = index == 0;
+        SeamTab.IsVisible = index == 1;
+        EffectTab.IsVisible = index == 2;
+        LayerTab.IsVisible = index == 3;
     }
 
     private void ApplySettings()
@@ -90,208 +108,31 @@ public partial class MainWindow : Window
         if (_engine is null || _suppressApply)
             return;
 
-        int frequency = (int)FrequencySlider.Value;
-        int octaves = (int)OctavesSlider.Value;
-        FrequencyLabel.Text = $"Frequency: {frequency}";
-        OctavesLabel.Text = $"Octaves: {octaves}";
-        PersistenceLabel.Text = $"Persistence: {PersistenceSlider.Value:0.00}";
-        InnerRadiusLabel.Text = $"内径: {InnerRadiusSlider.Value:0.00}";
-        OuterRadiusLabel.Text = $"外径: {OuterRadiusSlider.Value:0.00}";
-        RotationLabel.Text = $"回転: {RotationSlider.Value:0}°";
-        HeatThresholdLabel.Text = $"しきい値: 内部平均の {HeatThresholdSlider.Value:0.0} 倍";
-        ScrollULabel.Text = $"UV スクロール U: {ScrollUSlider.Value:0.00} /s";
-        ScrollVLabel.Text = $"UV スクロール V: {ScrollVSlider.Value:0.00} /s";
-        LacunarityLabel.Text = $"Lacunarity: {(int)LacunaritySlider.Value}";
-        WarpLabel.Text = $"ドメインワープ: {WarpSlider.Value:0.00}";
-        ContrastLabel.Text = $"コントラスト: {ContrastSlider.Value:0.00}";
-        BrightnessLabel.Text = $"明るさ: {BrightnessSlider.Value:+0.00;-0.00;0.00}";
+        var mode = Strip.Mode;
+        var effect = EffectTab.Read();
+        _engine.Noise = NoiseTab.Read();
+        _engine.Effect = effect;
+        _engine.Preview = ReadPreviewSettings();
 
-        var noise = ReadNoiseSettings();
-        WorleyModeBox.IsEnabled = noise.Type == NoiseType.Worley;
-        _engine.Noise = noise;
-        var mode = (PreviewMode)Math.Max(0, ViewModeBox.SelectedIndex);
         // 極座標の設定はエフェクトを極座標で貼るときにも使う
-        PolarPanel.IsVisible = mode is PreviewMode.Polar or PreviewMode.Effect;
-        EffectSettingsPanel.IsVisible = mode == PreviewMode.Effect;
-        TimelineBar.IsVisible = mode == PreviewMode.Effect;
-        SeamCheckPanel.IsVisible = mode == PreviewMode.SeamCheck;
+        Strip.ShowPolarSettings = mode == PreviewMode.Polar
+            || (mode == PreviewMode.Effect && effect.Mapping == EffectMapping.Polar);
+        TileThumb.IsActive = mode == PreviewMode.Tile3x3;
+        PolarThumb.IsActive = mode == PreviewMode.Polar;
+        EffectThumb.IsActive = mode == PreviewMode.Effect;
 
-        // 外径は内径より外に保つ
-        float inner = (float)InnerRadiusSlider.Value;
-        float outer = Math.Max((float)OuterRadiusSlider.Value, inner + 0.01f);
-
-        _engine.Preview = new PreviewSettings
-        {
-            Mode = mode,
-            ScrollSpeedU = (float)ScrollUSlider.Value,
-            ScrollSpeedV = (float)ScrollVSlider.Value,
-            Polar = new PolarSettings(inner, outer, (float)RotationSlider.Value,
-                FlipAngularBox.IsChecked == true, FlipRadialBox.IsChecked == true),
-            Heatmap = (HeatmapMode)Math.Max(0, HeatmapBox.SelectedIndex),
-            HeatThreshold = (float)HeatThresholdSlider.Value,
-        };
-        _engine.Effect = EffectSettingsPanel.Read();
-        _engine.VSync = VSyncBox.IsChecked == true;
         MarkDirty();
     }
 
-    private void SetUpTimeline(EffectTimeline timeline)
+    private PreviewSettings ReadPreviewSettings() => new()
     {
-        PlayButton.Click += (_, _) => timeline.TogglePlay();
-        StopButton.Click += (_, _) => timeline.Stop();
-        LoopBox.IsCheckedChanged += (_, _) =>
-        {
-            timeline.Loop = LoopBox.IsChecked == true;
-            MarkDirty();
-        };
-        DurationBox.ValueChanged += (_, _) =>
-        {
-            timeline.Duration = (double)(DurationBox.Value ?? 2m);
-            MarkDirty();
-        };
-        TimelineSlider.ValueChanged += (_, e) =>
-        {
-            if (!_updatingTimeline)
-                timeline.SeekNormalized(e.NewValue); // スクラブ
-        };
-
-        // 再生位置の表示は 30Hz で更新する (統計表示の 4Hz ではスライダーの動きがカクつく)
-        _timelineTimer.Tick += (_, _) =>
-        {
-            if (!TimelineBar.IsVisible)
-                return;
-            _updatingTimeline = true;
-            try
-            {
-                TimelineSlider.Value = timeline.NormalizedTime;
-            }
-            finally
-            {
-                _updatingTimeline = false;
-            }
-            TimeText.Text = $"{timeline.Time:0.00} / {timeline.Duration:0.00} s";
-            PlayButton.Content = timeline.IsPlaying ? "⏸ 一時停止" : "▶ 再生";
-        };
-        _timelineTimer.Start();
-    }
-
-    private NoiseSettings ReadNoiseSettings() => new()
-    {
-        Type = (NoiseType)Math.Max(0, NoiseTypeBox.SelectedIndex),
-        Resolution = Resolutions[Math.Clamp(ResolutionBox.SelectedIndex, 0, Resolutions.Length - 1)],
-        Seed = (uint)(SeedBox.Value ?? 0),
-        Frequency = (int)FrequencySlider.Value,
-        Octaves = (int)OctavesSlider.Value,
-        Persistence = (float)PersistenceSlider.Value,
-        Seam = (SeamMode)Math.Max(0, SeamBox.SelectedIndex),
-        Lacunarity = (int)LacunaritySlider.Value,
-        Fractal = (FractalMode)Math.Max(0, FractalBox.SelectedIndex),
-        Worley = (WorleyMode)Math.Max(0, WorleyModeBox.SelectedIndex),
-        WarpStrength = (float)WarpSlider.Value,
-        Contrast = (float)ContrastSlider.Value,
-        Brightness = (float)BrightnessSlider.Value,
-        Invert = InvertBox.IsChecked == true,
+        Mode = Strip.Mode,
+        ScrollSpeedU = EffectTab.ScrollU,
+        ScrollSpeedV = EffectTab.ScrollV,
+        Polar = Strip.Polar,
+        Heatmap = SeamTab.Heatmap,
+        HeatThreshold = SeamTab.Threshold,
     };
-
-    private void WriteNoiseSettings(NoiseSettings s)
-    {
-        _suppressApply = true;
-        try
-        {
-            WriteNoiseControls(s);
-        }
-        finally
-        {
-            _suppressApply = false;
-        }
-        ApplySettings();
-    }
-
-    // 解像度は出力設定なので含めない (プリセットでは変えない)
-    private void WriteNoiseControls(NoiseSettings s)
-    {
-        NoiseTypeBox.SelectedIndex = (int)s.Type;
-        SeedBox.Value = s.Seed;
-        FrequencySlider.Value = s.Frequency;
-        OctavesSlider.Value = s.Octaves;
-        PersistenceSlider.Value = s.Persistence;
-        SeamBox.SelectedIndex = (int)s.Seam;
-        LacunaritySlider.Value = s.Lacunarity;
-        FractalBox.SelectedIndex = (int)s.Fractal;
-        WorleyModeBox.SelectedIndex = (int)s.Worley;
-        WarpSlider.Value = s.WarpStrength;
-        ContrastSlider.Value = s.Contrast;
-        BrightnessSlider.Value = s.Brightness;
-        InvertBox.IsChecked = s.Invert;
-    }
-
-    private void RefreshPresetList(string? selectName)
-    {
-        var presets = _presets.All;
-        _suppressApply = true;
-        try
-        {
-            PresetBox.ItemsSource = presets.Select(p => p.DisplayName).ToList();
-            PresetBox.SelectedIndex = selectName is null ? -1 : presets.ToList().FindIndex(p => p.Name == selectName);
-        }
-        finally
-        {
-            _suppressApply = false;
-        }
-        UpdatePresetButtons();
-    }
-
-    private NoisePreset? SelectedPreset =>
-        PresetBox.SelectedIndex is int i && i >= 0 && i < _presets.All.Count ? _presets.All[i] : null;
-
-    private void OnPresetSelected()
-    {
-        UpdatePresetButtons();
-        if (_suppressApply || SelectedPreset is not { } preset)
-            return;
-        PresetNameBox.Text = preset.IsBuiltIn ? "" : preset.Name;
-        WriteNoiseSettings(preset.Settings);
-    }
-
-    private void ShowPresetMessage(string message)
-    {
-        PresetMessage.Text = message;
-        PresetMessage.IsVisible = true;
-    }
-
-    private void UpdatePresetButtons() => DeletePresetButton.IsEnabled = SelectedPreset is { IsBuiltIn: false };
-
-    private void SavePreset()
-    {
-        string name = PresetNameBox.Text ?? "";
-        try
-        {
-            _presets.Save(name, ReadNoiseSettings());
-            RefreshPresetList(name.Trim());
-            ShowPresetMessage($"「{name.Trim()}」を保存しました。");
-        }
-        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
-        {
-            ShowPresetMessage($"保存できません: {ex.Message}");
-        }
-    }
-
-    private void DeletePreset()
-    {
-        if (SelectedPreset is not { IsBuiltIn: false } preset)
-            return;
-        try
-        {
-            _presets.Delete(preset.Name);
-            RefreshPresetList(null);
-            PresetNameBox.Text = "";
-            ShowPresetMessage($"「{preset.Name}」を削除しました。");
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            ShowPresetMessage($"削除できません: {ex.Message}");
-        }
-    }
 
     // Avalonia の RequestAnimationFrame では 60Hz 環境でも 40fps 程度しか回らなかったため、
     // 描画は専用スレッドで回し Present の VSync 待ちでペースを取る。UI スレッドには統計だけ渡す。
@@ -300,14 +141,17 @@ public partial class MainWindow : Window
         var engine = _engine!;
         var fpsClock = Stopwatch.StartNew();
         int frames = 0;
+        var sizes = new (int Width, int Height)[_hosts.Length];
 
         while (!_closed)
         {
-            var (w, h) = Viewport.PixelSize;
+            for (int i = 0; i < _hosts.Length; i++)
+                sizes[i] = _hosts[i].PixelSize;
+
             RenderStats stats;
             try
             {
-                if (!engine.RenderFrame(w, h, out stats))
+                if (!engine.RenderFrame(sizes, out stats))
                 {
                     Thread.Sleep(16); // 描画先がない (最小化・HWND 作成前)
                     continue;
@@ -315,8 +159,8 @@ public partial class MainWindow : Window
             }
             catch (Exception ex)
             {
-                // デバイスロスト等。Phase 1 では復帰処理は行わない
-                Dispatcher.UIThread.Post(() => StatusText.Text = $"描画エラー: {ex.Message}");
+                // デバイスロスト等。復帰処理は未実装
+                Dispatcher.UIThread.Post(() => Status.ShowFailure(Loc.F("S.Status.RenderFailed", ex.Message)));
                 return;
             }
 
@@ -340,38 +184,29 @@ public partial class MainWindow : Window
         if (_closed)
             return;
 
-        if (stats.ShaderErrors != _shownErrors)
-        {
-            _shownErrors = stats.ShaderErrors;
-            ErrorText.Text = _shownErrors;
-            ErrorPanel.IsVisible = _shownErrors is not null;
-        }
-
-        ShowSeamAnalysis(stats.Seam, stats.SeamAnalysisPending);
-
-        StatusText.Text =
-            $"{stats.AdapterName}  |  Texture {stats.TextureWidth}×{stats.TextureHeight}  |  " +
-            $"Viewport {stats.ViewportWidth}×{stats.ViewportHeight}  |  " +
-            $"Noise GPU {stats.ComputeMilliseconds:0.000} ms  |  Frame GPU {stats.FrameMilliseconds:0.000} ms  |  {fps:0.0} fps";
+        Status.ShowStats(stats, fps);
+        SeamTab.ShowAnalysis(stats.Seam, stats.SeamAnalysisPending);
+        ShowSeamMark(stats.Seam);
+        Strip.SetZoom(ZoomRatio(stats));
     }
 
-    private void ShowSeamAnalysis(SeamAnalysis? seam, bool pending)
+    // シームのタブに判定を常に出す
+    private void ShowSeamMark(SeamAnalysis? seam)
     {
-        if (seam is null)
-        {
-            SeamVerdictText.Text = "シーム判定: 解析中...";
-            SeamDetailText.Text = "";
-            return;
-        }
+        bool seamless = seam is { Horizontal.IsSeamless: true, Vertical.IsSeamless: true };
+        SeamMarkText.Text = seam is null ? "" : seamless ? "✓" : "!";
+        SeamMarkText.Classes.Set("ok", seam is not null && seamless);
+        SeamMarkText.Classes.Set("bad", seam is not null && !seamless);
+    }
 
-        string Verdict(SeamReport r) => r.IsSeamless ? "継ぎ目なし" : "継ぎ目あり";
-        bool all = seam.Horizontal.IsSeamless && seam.Vertical.IsSeamless;
-        SeamVerdictText.Text = $"シーム判定: 左右 {Verdict(seam.Horizontal)} / 上下 {Verdict(seam.Vertical)}" + (pending ? "（更新中）" : "");
-        SeamVerdictText.Foreground = all ? Avalonia.Media.Brushes.LightGreen : Avalonia.Media.Brushes.Orange;
-        SeamDetailText.Text =
-            $"左右  値 {seam.Horizontal.ValueRatio,5:0.00}  勾配 {seam.Horizontal.GradientRatio,5:0.00}\n" +
-            $"上下  値 {seam.Vertical.ValueRatio,5:0.00}  勾配 {seam.Vertical.GradientRatio,5:0.00}\n" +
-            $"基準  値 < {SeamReport.SeamlessValueLimit:0.0}  勾配 < {SeamReport.SeamlessGradientLimit:0.0}";
+    private double? ZoomRatio(RenderStats stats)
+    {
+        if (Strip.Mode == PreviewMode.Effect || stats.TextureWidth <= 0)
+            return null;
+        // Shaders/Preview.hlsl の内容の大きさと同じ計算 (余白は RenderEngine.MainContentMargin の両側)
+        const double margin = 24;
+        double tiles = Strip.Mode == PreviewMode.Tile3x3 ? 3 : 1;
+        return Math.Min(stats.ViewportWidth - margin, stats.ViewportHeight - margin) / (stats.TextureWidth * tiles);
     }
 
     // 開発中はリポジトリ直下の Shaders/ を直接監視してホットリロードする

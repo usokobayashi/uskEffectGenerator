@@ -1,0 +1,17 @@
+<!-- 左: 道具。ペイント機能ができるまで無効の見た目で場所を確保する -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="UskEffect.App.Views.ToolRail">
+  <Border Width="{StaticResource Ue.Size.Rail}" Background="{StaticResource Ue.Panel}" BorderBrush="{StaticResource Ue.Line}"
+          BorderThickness="{StaticResource Ue.Line.Right}" Padding="0,8">
+    <StackPanel HorizontalAlignment="Center" Spacing="{StaticResource Ue.Gap.Tight}">
+      <Button Classes="tool" IsEnabled="False" ToolTip.Tip="{DynamicResource S.Tool.Brush}" AutomationProperties.Name="{DynamicResource S.Tool.Brush}"><Path Classes="stroke icon" Data="{StaticResource Icon.Brush}" /></Button>
+      <Button Classes="tool" IsEnabled="False" ToolTip.Tip="{DynamicResource S.Tool.Eraser}" AutomationProperties.Name="{DynamicResource S.Tool.Eraser}"><Path Classes="stroke icon" Data="{StaticResource Icon.Eraser}" /></Button>
+      <Button Classes="tool" IsEnabled="False" ToolTip.Tip="{DynamicResource S.Tool.Blur}" AutomationProperties.Name="{DynamicResource S.Tool.Blur}"><Path Classes="stroke icon" Data="{StaticResource Icon.Blur}" /></Button>
+      <Button Classes="tool" IsEnabled="False" ToolTip.Tip="{DynamicResource S.Tool.Smudge}" AutomationProperties.Name="{DynamicResource S.Tool.Smudge}"><Path Classes="stroke icon" Data="{StaticResource Icon.Smudge}" /></Button>
+      <Button Classes="tool" IsEnabled="False" ToolTip.Tip="{DynamicResource S.Tool.Picker}" AutomationProperties.Name="{DynamicResource S.Tool.Picker}"><Path Classes="stroke icon" Data="{StaticResource Icon.Picker}" /></Button>
+      <Button Classes="tool" IsEnabled="False" ToolTip.Tip="{DynamicResource S.Tool.Fill}" AutomationProperties.Name="{DynamicResource S.Tool.Fill}"><Path Classes="stroke icon" Data="{StaticResource Icon.Fill}" /></Button>
+      <Button Classes="tool" IsEnabled="False" ToolTip.Tip="{DynamicResource S.Tool.Move}" AutomationProperties.Name="{DynamicResource S.Tool.Move}"><Path Classes="stroke icon" Data="{StaticResource Icon.Move}" /></Button>
+    </StackPanel>
+  </Border>
+</UserControl>

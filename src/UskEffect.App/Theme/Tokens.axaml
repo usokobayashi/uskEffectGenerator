@@ -1,0 +1,122 @@
+<!-- 共通の定義。値はモックアップ (Main.dc.html) の CSS を正とする。画面や部品に数値を直接書かない -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="using:System">
+
+  <!-- 色 -->
+  <SolidColorBrush x:Key="Ue.Ground" Color="#15181B" />
+  <SolidColorBrush x:Key="Ue.Panel" Color="#1C2024" />
+  <SolidColorBrush x:Key="Ue.Raised" Color="#262B30" />
+  <SolidColorBrush x:Key="Ue.Hover" Color="#2F353B" />
+  <SolidColorBrush x:Key="Ue.Line" Color="#343A41" />
+  <SolidColorBrush x:Key="Ue.Text" Color="#E4E8EB" />
+  <SolidColorBrush x:Key="Ue.Muted" Color="#A3ACB4" />
+  <SolidColorBrush x:Key="Ue.Accent" Color="#56C8D0" />
+  <SolidColorBrush x:Key="Ue.AccentInk" Color="#08282B" />
+  <SolidColorBrush x:Key="Ue.Fill" Color="#2D5A60" />
+  <SolidColorBrush x:Key="Ue.Ok" Color="#7ED69A" />
+  <SolidColorBrush x:Key="Ue.Warn" Color="#F2A65A" />
+  <SolidColorBrush x:Key="Ue.Bad" Color="#F0635A" />
+  <SolidColorBrush x:Key="Ue.Stage" Color="#111417" />
+  <SolidColorBrush x:Key="Ue.Transparent" Color="Transparent" />
+
+  <!-- 角丸 -->
+  <CornerRadius x:Key="Ue.Radius">4</CornerRadius>
+  <CornerRadius x:Key="Ue.RadiusInner">3</CornerRadius>
+  <CornerRadius x:Key="Ue.RadiusSwitch">8</CornerRadius>
+  <CornerRadius x:Key="Ue.RadiusKnob">6</CornerRadius>
+  <CornerRadius x:Key="Ue.RadiusHelp">7</CornerRadius>
+
+  <!-- 大きさ -->
+  <sys:Double x:Key="Ue.Size.Bar">36</sys:Double>
+  <sys:Double x:Key="Ue.Size.Status">22</sys:Double>
+  <sys:Double x:Key="Ue.Size.Rail">44</sys:Double>
+  <sys:Double x:Key="Ue.Size.Tool">32</sys:Double>
+  <sys:Double x:Key="Ue.Size.IconButton">26</sys:Double>
+  <sys:Double x:Key="Ue.Size.Icon">16</sys:Double>
+  <sys:Double x:Key="Ue.Size.Chevron">12</sys:Double>
+  <sys:Double x:Key="Ue.Size.Field">24</sys:Double>
+  <sys:Double x:Key="Ue.Size.Scrub">22</sys:Double>
+  <sys:Double x:Key="Ue.Size.Layer">30</sys:Double>
+  <sys:Double x:Key="Ue.Size.RowLabel">64</sys:Double>
+  <sys:Double x:Key="Ue.Size.ModeSegment">132</sys:Double>
+  <sys:Double x:Key="Ue.Size.ProjectName">180</sys:Double>
+  <sys:Double x:Key="Ue.Size.PolarButton">148</sys:Double>
+  <sys:Double x:Key="Ue.Size.PolarPopup">240</sys:Double>
+  <sys:Double x:Key="Ue.Size.Resolution">66</sys:Double>
+  <sys:Double x:Key="Ue.Size.Duration">92</sys:Double>
+  <sys:Double x:Key="Ue.Size.Tip">220</sys:Double>
+  <sys:Double x:Key="Ue.Size.SwitchWidth">30</sys:Double>
+  <sys:Double x:Key="Ue.Size.SwitchHeight">16</sys:Double>
+  <sys:Double x:Key="Ue.Size.SwitchKnob">12</sys:Double>
+  <sys:Double x:Key="Ue.Size.Help">14</sys:Double>
+  <sys:Double x:Key="Ue.Size.Separator">16</sys:Double>
+  <sys:Double x:Key="Ue.Size.RightPanel">320</sys:Double>
+  <sys:Double x:Key="Ue.Size.RightPanelNarrow">264</sys:Double>
+  <sys:Double x:Key="Ue.Size.DisabledOpacity">0.38</sys:Double>
+
+  <!-- 線の太さ・余白 -->
+  <Thickness x:Key="Ue.Line.Top">0,1,0,0</Thickness>
+  <Thickness x:Key="Ue.Line.Bottom">0,0,0,1</Thickness>
+  <Thickness x:Key="Ue.Line.Left">1,0,0,0</Thickness>
+  <Thickness x:Key="Ue.Line.Right">0,0,1,0</Thickness>
+  <Thickness x:Key="Ue.Line.All">1</Thickness>
+  <Thickness x:Key="Ue.Ring">2</Thickness>
+  <Thickness x:Key="Ue.Pad.Bar">8,0</Thickness>
+  <Thickness x:Key="Ue.Pad.Field">8,0</Thickness>
+  <Thickness x:Key="Ue.Pad.Dropdown">8,0,6,0</Thickness>
+  <Thickness x:Key="Ue.Pad.Button">10,0</Thickness>
+  <Thickness x:Key="Ue.Pad.Segment">2</Thickness>
+  <Thickness x:Key="Ue.Pad.SegmentItem">9,0</Thickness>
+  <Thickness x:Key="Ue.Pad.Previews">12,8</Thickness>
+  <Thickness x:Key="Ue.Pad.Tabs">12,8,12,0</Thickness>
+  <Thickness x:Key="Ue.Pad.Body">12,8,12,12</Thickness>
+  <Thickness x:Key="Ue.Pad.Popup">3</Thickness>
+  <Thickness x:Key="Ue.Pad.PopupWide">8</Thickness>
+  <Thickness x:Key="Ue.Pad.Tip">9,7</Thickness>
+  <Thickness x:Key="Ue.Pad.Chip">8</Thickness>
+  <Thickness x:Key="Ue.Margin.Separator">6,0</Thickness>
+  <Thickness x:Key="Ue.Margin.Heading">0,5,0,0</Thickness>
+  <sys:Double x:Key="Ue.Gap.Tight">2</sys:Double>
+  <sys:Double x:Key="Ue.Gap.Small">4</sys:Double>
+  <sys:Double x:Key="Ue.Gap.Row">5</sys:Double>
+  <sys:Double x:Key="Ue.Gap.Line">6</sys:Double>
+  <sys:Double x:Key="Ue.Gap.Normal">8</sys:Double>
+  <sys:Double x:Key="Ue.Gap.Status">10</sys:Double>
+
+  <!-- 文字 -->
+  <FontFamily x:Key="Ue.Font">Yu Gothic UI, Meiryo UI, Segoe UI</FontFamily>
+  <FontFamily x:Key="Ue.Font.Mono">Consolas, Cascadia Mono</FontFamily>
+  <sys:Double x:Key="Ue.FontSize">12</sys:Double>
+  <sys:Double x:Key="Ue.FontSize.Small">11</sys:Double>
+  <sys:Double x:Key="Ue.FontSize.Help">10</sys:Double>
+
+  <!-- 動き: 終わり際をゆっくりにする cubic-bezier(.23,1,.32,1) -->
+  <SplineEasing x:Key="Ue.Ease" X1="0.23" Y1="1" X2="0.32" Y2="1" />
+  <sys:TimeSpan x:Key="Ue.Motion.Fill">0:0:0.09</sys:TimeSpan>
+  <sys:TimeSpan x:Key="Ue.Motion.Fast">0:0:0.12</sys:TimeSpan>
+  <sys:TimeSpan x:Key="Ue.Motion.Tip">0:0:0.14</sys:TimeSpan>
+  <sys:TimeSpan x:Key="Ue.Motion.Popup">0:0:0.15</sys:TimeSpan>
+  <sys:TimeSpan x:Key="Ue.Motion.Ring">0:0:0.16</sys:TimeSpan>
+  <sys:TimeSpan x:Key="Ue.Motion.Toggle">0:0:0.2</sys:TimeSpan>
+  <sys:TimeSpan x:Key="Ue.Motion.Thumb">0:0:0.22</sys:TimeSpan>
+
+  <!-- アイコン (16×16 の線画) -->
+  <StreamGeometry x:Key="Icon.Open">M2 5v7.5h10.5L14 7H5l-1.5 5.5M2 5V3.5h4L7 5h5v2</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Save">M3 3h8l2 2v8H3zM5 3v3.5h5V3M5 13V9h6v4</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Export">M8 10V2.5M5 5l3-3 3 3M3 9v4h10V9</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Undo">M6 4 3 7l3 3M3 7h6.5a3.5 3.5 0 0 1 0 7H7</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Redo">M10 4l3 3-3 3M13 7H6.5a3.5 3.5 0 0 0 0 7H9</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Brush">M3 13c2 0 3-1 3-2.5L12 4.5 11.5 4 5.5 10C4 10 3 11 3 13z</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Eraser">M6 13h7M3.5 9.5 9 4l4 4-5 5H6z</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Blur">M8 2.5c2 3 4 4.8 4 7a4 4 0 0 1-8 0c0-2.2 2-4 4-7z</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Smudge">M6 8V3.5a1 1 0 0 1 2 0V8m0-1.5a1 1 0 0 1 2 0V8m0-.5a1 1 0 0 1 2 0V11a3 3 0 0 1-3 3H8a3 3 0 0 1-3-2L4 9.5</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Picker">M3 13l1-3 5-5 2 2-5 5zM9 3l4 4</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Fill">M7 3l5 5-5 5-4-4zM3 9h9M13 11s1 1.3 1 2a1 1 0 0 1-2 0c0-.7 1-2 1-2z</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Move">M8 2v12M2 8h12M8 2 6.5 3.5M8 2l1.5 1.5M8 14l-1.5-1.5M8 14l1.5-1.5M2 8l1.5-1.5M2 8l1.5 1.5M14 8l-1.5-1.5M14 8l-1.5 1.5</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Play">M5 3l8 5-8 5z</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Pause">M5 3v10M11 3v10</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Stop">M4 4h8v8H4z</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Chevron">M4 6l4 4 4-4</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Eye">M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8zM8 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4z</StreamGeometry>
+</ResourceDictionary>
