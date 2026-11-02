@@ -22,6 +22,19 @@
       <TextBlock x:Name="StatusText" FontFamily="Consolas,monospace" FontSize="12" Text="GPU 初期化中..." />
     </Border>
 
+    <!-- 下部: エフェクト再生タイムライン (FR-05) -->
+    <Border x:Name="TimelineBar" DockPanel.Dock="Bottom" Padding="10,6" Background="#252526">
+      <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto">
+        <Button x:Name="PlayButton" Content="▶ 再生" MinWidth="120" HorizontalContentAlignment="Center" />
+        <Button Grid.Column="1" x:Name="StopButton" Content="■ 停止" Margin="6,0,0,0" />
+        <Slider Grid.Column="2" x:Name="TimelineSlider" Minimum="0" Maximum="1" Margin="12,0" VerticalAlignment="Center" />
+        <TextBlock Grid.Column="3" x:Name="TimeText" FontFamily="Consolas,monospace" VerticalAlignment="Center" Width="120" Text="0.00 / 2.00 s" />
+        <CheckBox Grid.Column="4" x:Name="LoopBox" Content="ループ" IsChecked="True" Margin="8,0" />
+        <TextBlock Grid.Column="5" Text="長さ [s]" VerticalAlignment="Center" Margin="8,0,6,0" Opacity="0.8" />
+        <NumericUpDown Grid.Column="6" x:Name="DurationBox" Value="2" Minimum="0.1" Maximum="60" Increment="0.1" FormatString="0.0" Width="110" />
+      </Grid>
+    </Border>
+
     <!-- シェーダーエラー (FR-10) -->
     <Border x:Name="ErrorPanel" DockPanel.Dock="Bottom" Background="#3A1414" Padding="10,6" IsVisible="False">
       <SelectableTextBlock x:Name="ErrorText" Foreground="#FF8080" FontFamily="Consolas,monospace" FontSize="12"
@@ -121,7 +134,11 @@
           <ComboBoxItem Content="3×3 タイル" />
           <ComboBoxItem Content="極座標" />
           <ComboBoxItem Content="シーム検証（半タイルずらし）" />
+          <ComboBoxItem Content="エフェクト（タイムライン再生）" />
         </ComboBox>
+
+        <!-- エフェクトプレビュー (FR-05 / FR-06) -->
+        <controls:EffectPanel x:Name="EffectSettingsPanel" />
 
         <!-- 極座標 (FR-03) -->
         <StackPanel x:Name="PolarPanel">

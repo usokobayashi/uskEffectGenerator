@@ -40,6 +40,9 @@ public enum PreviewMode : uint
 
     /// <summary>半タイルずらして継ぎ目を中央に集め、差分をヒートマップで重ねる (FR-04)。</summary>
     SeamCheck = 3,
+
+    /// <summary>タイムラインで再生するエフェクトプレビュー (FR-05 / FR-06)。</summary>
+    Effect = 4,
 }
 
 public enum HeatmapMode : uint

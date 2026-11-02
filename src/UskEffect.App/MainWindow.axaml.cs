@@ -5,6 +5,7 @@ using Avalonia.Threading;
 using UskEffect.App.Presets;
 using UskEffect.Graphics;
 using UskEffect.Graphics.Analysis;
+using UskEffect.Graphics.Effects;
 
 namespace UskEffect.App;
 
@@ -15,6 +16,8 @@ public partial class MainWindow : Window
     private readonly RenderEngine? _engine;
     private readonly NoisePresetStore _presets = new();
     private Thread? _renderThread;
+    private readonly DispatcherTimer _timelineTimer = new() { Interval = TimeSpan.FromMilliseconds(33) };
+    private bool _updatingTimeline;
     private bool _suppressApply;
     private string? _shownErrors;
     private volatile bool _closed;
@@ -57,6 +60,9 @@ public partial class MainWindow : Window
         VSyncBox.IsCheckedChanged += (_, _) => ApplySettings();
         ReloadButton.Click += (_, _) => _engine.ReloadShaders();
 
+        EffectSettingsPanel.Changed += ApplySettings;
+        SetUpTimeline(_engine.Timeline);
+
         PresetBox.SelectionChanged += (_, _) => OnPresetSelected();
         SavePresetButton.Click += (_, _) => SavePreset();
         DeletePresetButton.Click += (_, _) => DeletePreset();
@@ -71,6 +77,7 @@ public partial class MainWindow : Window
         Closed += (_, _) =>
         {
             _closed = true;
+            _timelineTimer.Stop();
             _renderThread?.Join();
             _engine.Dispose();
         };
@@ -101,7 +108,10 @@ public partial class MainWindow : Window
         WorleyModeBox.IsEnabled = noise.Type == NoiseType.Worley;
         _engine.Noise = noise;
         var mode = (PreviewMode)Math.Max(0, ViewModeBox.SelectedIndex);
-        PolarPanel.IsVisible = mode == PreviewMode.Polar;
+        // 極座標の設定はエフェクトを極座標で貼るときにも使う
+        PolarPanel.IsVisible = mode is PreviewMode.Polar or PreviewMode.Effect;
+        EffectSettingsPanel.IsVisible = mode == PreviewMode.Effect;
+        TimelineBar.IsVisible = mode == PreviewMode.Effect;
         SeamCheckPanel.IsVisible = mode == PreviewMode.SeamCheck;
 
         // 外径は内径より外に保つ
@@ -118,7 +128,40 @@ public partial class MainWindow : Window
             Heatmap = (HeatmapMode)Math.Max(0, HeatmapBox.SelectedIndex),
             HeatThreshold = (float)HeatThresholdSlider.Value,
         };
+        _engine.Effect = EffectSettingsPanel.Read();
         _engine.VSync = VSyncBox.IsChecked == true;
+    }
+
+    private void SetUpTimeline(EffectTimeline timeline)
+    {
+        PlayButton.Click += (_, _) => timeline.TogglePlay();
+        StopButton.Click += (_, _) => timeline.Stop();
+        LoopBox.IsCheckedChanged += (_, _) => timeline.Loop = LoopBox.IsChecked == true;
+        DurationBox.ValueChanged += (_, _) => timeline.Duration = (double)(DurationBox.Value ?? 2m);
+        TimelineSlider.ValueChanged += (_, e) =>
+        {
+            if (!_updatingTimeline)
+                timeline.SeekNormalized(e.NewValue); // スクラブ
+        };
+
+        // 再生位置の表示は 30Hz で更新する (統計表示の 4Hz ではスライダーの動きがカクつく)
+        _timelineTimer.Tick += (_, _) =>
+        {
+            if (!TimelineBar.IsVisible)
+                return;
+            _updatingTimeline = true;
+            try
+            {
+                TimelineSlider.Value = timeline.NormalizedTime;
+            }
+            finally
+            {
+                _updatingTimeline = false;
+            }
+            TimeText.Text = $"{timeline.Time:0.00} / {timeline.Duration:0.00} s";
+            PlayButton.Content = timeline.IsPlaying ? "⏸ 一時停止" : "▶ 再生";
+        };
+        _timelineTimer.Start();
     }
 
     private NoiseSettings ReadNoiseSettings() => new()

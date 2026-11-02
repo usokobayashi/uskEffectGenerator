@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using UskEffect.Graphics.Analysis;
+using UskEffect.Graphics.Effects;
 
 namespace UskEffect.Graphics;
 
@@ -27,11 +28,14 @@ public sealed class RenderEngine : IDisposable
     private readonly GpuDevice _gpu;
     private readonly NoiseGenerator _noise;
     private readonly PreviewRenderer _preview;
+    private readonly EffectRenderer _effect;
     private readonly GpuTimer _timer;
     private readonly FileSystemWatcher? _watcher;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private readonly string _noiseShaderPath;
     private readonly string _previewShaderPath;
+    private readonly string _effectShaderPath;
+    private TimeSpan _lastFrameTime;
 
     private readonly object _sync = new();
 
@@ -41,6 +45,7 @@ public sealed class RenderEngine : IDisposable
     private volatile bool _shadersDirty = true;
     private string? _noiseErrors;
     private string? _previewErrors;
+    private string? _effectErrors;
 
     // スライダー操作中に毎フレーム読み戻すと描画が詰まるので、最後の生成から少し待って 1 回だけ解析する
     private static readonly TimeSpan AnalysisDelay = TimeSpan.FromMilliseconds(150);
@@ -50,6 +55,10 @@ public sealed class RenderEngine : IDisposable
     private volatile SeamAnalysis? _seamAnalysis;
 
     public volatile PreviewSettings Preview = new();
+    public volatile EffectSettings Effect = new();
+
+    /// <summary>エフェクトプレビューの再生位置。UI スレッドから再生操作できる。</summary>
+    public EffectTimeline Timeline { get; } = new();
     public volatile bool VSync = true;
 
     public NoiseSettings Noise
@@ -71,6 +80,7 @@ public sealed class RenderEngine : IDisposable
         ShaderDirectory = shaderDirectory;
         _noiseShaderPath = Path.Combine(shaderDirectory, "Noise", "PeriodicNoise.hlsl");
         _previewShaderPath = Path.Combine(shaderDirectory, "Preview.hlsl");
+        _effectShaderPath = Path.Combine(shaderDirectory, "Effect.hlsl");
 
 #if DEBUG
         _gpu = new GpuDevice(enableDebugLayer: true);
@@ -79,6 +89,7 @@ public sealed class RenderEngine : IDisposable
 #endif
         _noise = new NoiseGenerator(_gpu);
         _preview = new PreviewRenderer(_gpu);
+        _effect = new EffectRenderer(_gpu);
         _timer = new GpuTimer(_gpu);
 
         if (Directory.Exists(shaderDirectory))
@@ -136,6 +147,7 @@ public sealed class RenderEngine : IDisposable
             _shadersDirty = false;
             _noiseErrors = _noise.LoadShader(_noiseShaderPath);
             _previewErrors = _preview.LoadShader(_previewShaderPath);
+            _effectErrors = _effect.LoadShader(_effectShaderPath);
             _noiseDirty = true;
         }
 
@@ -153,18 +165,30 @@ public sealed class RenderEngine : IDisposable
                 _analysisPending = true;
                 _lastNoiseGenerated = _clock.Elapsed;
             }
-            _preview.Render(_target, _noise.ShaderResourceView, _noise.Width, _noise.Height, Preview,
-                (float)_clock.Elapsed.TotalSeconds, _seamAnalysis);
+            var now = _clock.Elapsed;
+            Timeline.Advance((now - _lastFrameTime).TotalSeconds);
+            _lastFrameTime = now;
+
+            var preview = Preview;
+            if (preview.Mode == PreviewMode.Effect)
+            {
+                var effect = Effect;
+                var frame = EffectEvaluator.Evaluate(effect, preview, Timeline.Time, Timeline.NormalizedTime);
+                _effect.Render(_target.RenderTargetView, _target.Width, _target.Height, _noise.ShaderResourceView,
+                    effect, preview.Polar, frame);
+            }
+            else
+            {
+                _preview.Render(_target, _noise.ShaderResourceView, _noise.Width, _noise.Height, preview,
+                    (float)now.TotalSeconds, _seamAnalysis);
+            }
             _timer.EndFrame();
             _target.Present(VSync);
             StartSeamAnalysisIfIdle();
         }
 
-        string? errors = (_noiseErrors, _previewErrors) switch
-        {
-            (null, null) => null,
-            var (a, b) => string.Join(Environment.NewLine, new[] { a, b }.Where(e => e is not null)),
-        };
+        var errorList = new[] { _noiseErrors, _previewErrors, _effectErrors }.Where(e => e is not null).ToList();
+        string? errors = errorList.Count == 0 ? null : string.Join(Environment.NewLine, errorList);
         stats = new RenderStats(_gpu.AdapterName, _noise.Width, _noise.Height,
             _target?.Width ?? 0, _target?.Height ?? 0,
             _timer.ComputeMilliseconds, _timer.FrameMilliseconds, errors,
@@ -195,6 +219,7 @@ public sealed class RenderEngine : IDisposable
         lock (_sync)
         {
             _timer.Dispose();
+            _effect.Dispose();
             _preview.Dispose();
             _noise.Dispose();
             _gpu.Dispose();
