@@ -27,6 +27,11 @@ public sealed class GpuDevice : IDisposable
             // Graphics Tools 未インストール環境ではデバッグレイヤーなしで再試行
             result = D3D11.D3D11CreateDevice(null, DriverType.Hardware, DeviceCreationFlags.BgraSupport, FeatureLevels, out device, out context);
         }
+        if (result.Failure)
+        {
+            // ハードウェア GPU が使えない環境 (リモートデスクトップ・CI) ではソフトウェアラスタライザで動かす
+            result = D3D11.D3D11CreateDevice(null, DriverType.Warp, DeviceCreationFlags.BgraSupport, FeatureLevels, out device, out context);
+        }
         result.CheckError();
 
         Device = device!;

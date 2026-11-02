@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Threading;
+using UskEffect.App.Presets;
 using UskEffect.Graphics;
 
 namespace UskEffect.App;
@@ -11,7 +12,9 @@ public partial class MainWindow : Window
     private static readonly int[] Resolutions = [256, 512, 1024, 2048];
 
     private readonly RenderEngine? _engine;
+    private readonly NoisePresetStore _presets = new();
     private Thread? _renderThread;
+    private bool _suppressApply;
     private string? _shownErrors;
     private volatile bool _closed;
 
@@ -38,13 +41,23 @@ public partial class MainWindow : Window
         };
         Viewport.HwndDestroying += () => _engine.DetachWindow();
 
-        foreach (var slider in new RangeBase[] { FrequencySlider, OctavesSlider, PersistenceSlider, InnerRadiusSlider, ScrollUSlider, ScrollVSlider })
+        foreach (var slider in new RangeBase[]
+                 {
+                     FrequencySlider, OctavesSlider, PersistenceSlider, LacunaritySlider, WarpSlider, ContrastSlider,
+                     BrightnessSlider, InnerRadiusSlider, ScrollUSlider, ScrollVSlider,
+                 })
             slider.ValueChanged += (_, _) => ApplySettings();
-        foreach (var combo in new[] { NoiseTypeBox, ResolutionBox, SeamBox, ViewModeBox })
+        foreach (var combo in new[] { NoiseTypeBox, WorleyModeBox, FractalBox, ResolutionBox, SeamBox, ViewModeBox })
             combo.SelectionChanged += (_, _) => ApplySettings();
         SeedBox.ValueChanged += (_, _) => ApplySettings();
+        InvertBox.IsCheckedChanged += (_, _) => ApplySettings();
         VSyncBox.IsCheckedChanged += (_, _) => ApplySettings();
         ReloadButton.Click += (_, _) => _engine.ReloadShaders();
+
+        PresetBox.SelectionChanged += (_, _) => OnPresetSelected();
+        SavePresetButton.Click += (_, _) => SavePreset();
+        DeletePresetButton.Click += (_, _) => DeletePreset();
+        RefreshPresetList(null);
 
         ApplySettings();
         Opened += (_, _) =>
@@ -62,7 +75,7 @@ public partial class MainWindow : Window
 
     private void ApplySettings()
     {
-        if (_engine is null)
+        if (_engine is null || _suppressApply)
             return;
 
         int frequency = (int)FrequencySlider.Value;
@@ -73,17 +86,14 @@ public partial class MainWindow : Window
         InnerRadiusLabel.Text = $"極座標 内径: {InnerRadiusSlider.Value:0.00}";
         ScrollULabel.Text = $"UV スクロール U: {ScrollUSlider.Value:0.00} /s";
         ScrollVLabel.Text = $"UV スクロール V: {ScrollVSlider.Value:0.00} /s";
+        LacunarityLabel.Text = $"Lacunarity: {(int)LacunaritySlider.Value}";
+        WarpLabel.Text = $"ドメインワープ: {WarpSlider.Value:0.00}";
+        ContrastLabel.Text = $"コントラスト: {ContrastSlider.Value:0.00}";
+        BrightnessLabel.Text = $"明るさ: {BrightnessSlider.Value:+0.00;-0.00;0.00}";
 
-        _engine.Noise = new NoiseSettings
-        {
-            Type = (NoiseType)Math.Max(0, NoiseTypeBox.SelectedIndex),
-            Resolution = Resolutions[Math.Clamp(ResolutionBox.SelectedIndex, 0, Resolutions.Length - 1)],
-            Seed = (uint)(SeedBox.Value ?? 0),
-            Frequency = frequency,
-            Octaves = octaves,
-            Persistence = (float)PersistenceSlider.Value,
-            Seam = (SeamMode)Math.Max(0, SeamBox.SelectedIndex),
-        };
+        var noise = ReadNoiseSettings();
+        WorleyModeBox.IsEnabled = noise.Type == NoiseType.Worley;
+        _engine.Noise = noise;
         _engine.Preview = new PreviewSettings
         {
             Mode = (PreviewMode)Math.Max(0, ViewModeBox.SelectedIndex),
@@ -92,6 +102,119 @@ public partial class MainWindow : Window
             ScrollSpeedV = (float)ScrollVSlider.Value,
         };
         _engine.VSync = VSyncBox.IsChecked == true;
+    }
+
+    private NoiseSettings ReadNoiseSettings() => new()
+    {
+        Type = (NoiseType)Math.Max(0, NoiseTypeBox.SelectedIndex),
+        Resolution = Resolutions[Math.Clamp(ResolutionBox.SelectedIndex, 0, Resolutions.Length - 1)],
+        Seed = (uint)(SeedBox.Value ?? 0),
+        Frequency = (int)FrequencySlider.Value,
+        Octaves = (int)OctavesSlider.Value,
+        Persistence = (float)PersistenceSlider.Value,
+        Seam = (SeamMode)Math.Max(0, SeamBox.SelectedIndex),
+        Lacunarity = (int)LacunaritySlider.Value,
+        Fractal = (FractalMode)Math.Max(0, FractalBox.SelectedIndex),
+        Worley = (WorleyMode)Math.Max(0, WorleyModeBox.SelectedIndex),
+        WarpStrength = (float)WarpSlider.Value,
+        Contrast = (float)ContrastSlider.Value,
+        Brightness = (float)BrightnessSlider.Value,
+        Invert = InvertBox.IsChecked == true,
+    };
+
+    // 解像度は出力設定なのでプリセットでは変えない
+    private void WriteNoiseSettings(NoiseSettings s)
+    {
+        _suppressApply = true;
+        try
+        {
+            NoiseTypeBox.SelectedIndex = (int)s.Type;
+            SeedBox.Value = s.Seed;
+            FrequencySlider.Value = s.Frequency;
+            OctavesSlider.Value = s.Octaves;
+            PersistenceSlider.Value = s.Persistence;
+            SeamBox.SelectedIndex = (int)s.Seam;
+            LacunaritySlider.Value = s.Lacunarity;
+            FractalBox.SelectedIndex = (int)s.Fractal;
+            WorleyModeBox.SelectedIndex = (int)s.Worley;
+            WarpSlider.Value = s.WarpStrength;
+            ContrastSlider.Value = s.Contrast;
+            BrightnessSlider.Value = s.Brightness;
+            InvertBox.IsChecked = s.Invert;
+        }
+        finally
+        {
+            _suppressApply = false;
+        }
+        ApplySettings();
+    }
+
+    private void RefreshPresetList(string? selectName)
+    {
+        var presets = _presets.All;
+        _suppressApply = true;
+        try
+        {
+            PresetBox.ItemsSource = presets.Select(p => p.DisplayName).ToList();
+            PresetBox.SelectedIndex = selectName is null ? -1 : presets.ToList().FindIndex(p => p.Name == selectName);
+        }
+        finally
+        {
+            _suppressApply = false;
+        }
+        UpdatePresetButtons();
+    }
+
+    private NoisePreset? SelectedPreset =>
+        PresetBox.SelectedIndex is int i && i >= 0 && i < _presets.All.Count ? _presets.All[i] : null;
+
+    private void OnPresetSelected()
+    {
+        UpdatePresetButtons();
+        if (_suppressApply || SelectedPreset is not { } preset)
+            return;
+        PresetNameBox.Text = preset.IsBuiltIn ? "" : preset.Name;
+        WriteNoiseSettings(preset.Settings);
+    }
+
+    private void ShowPresetMessage(string message)
+    {
+        PresetMessage.Text = message;
+        PresetMessage.IsVisible = true;
+    }
+
+    private void UpdatePresetButtons() => DeletePresetButton.IsEnabled = SelectedPreset is { IsBuiltIn: false };
+
+    private void SavePreset()
+    {
+        string name = PresetNameBox.Text ?? "";
+        try
+        {
+            _presets.Save(name, ReadNoiseSettings());
+            RefreshPresetList(name.Trim());
+            ShowPresetMessage($"「{name.Trim()}」を保存しました。");
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            ShowPresetMessage($"保存できません: {ex.Message}");
+        }
+    }
+
+    private void DeletePreset()
+    {
+        if (SelectedPreset is not { IsBuiltIn: false } preset)
+            return;
+        try
+        {
+            _presets.Delete(preset.Name);
+            RefreshPresetList(null);
+            PresetNameBox.Text = "";
+            ShowPresetMessage($"「{preset.Name}」を削除しました。");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ShowPresetMessage($"削除できません: {ex.Message}");
+        }
     }
 
     // Avalonia の RequestAnimationFrame では 60Hz 環境でも 40fps 程度しか回らなかったため、

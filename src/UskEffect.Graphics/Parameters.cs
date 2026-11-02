@@ -6,6 +6,21 @@ public enum NoiseType : uint
 {
     Perlin = 0,
     Worley = 1,
+    Simplex = 2,
+}
+
+public enum FractalMode : uint
+{
+    Fbm = 0,
+    Ridged = 1,
+    Turbulence = 2,
+}
+
+public enum WorleyMode : uint
+{
+    F1 = 0,
+    F2 = 1,
+    F2MinusF1 = 2,
 }
 
 [Flags]
@@ -33,6 +48,18 @@ public sealed record NoiseSettings
     public int Octaves { get; init; } = 5;
     public float Persistence { get; init; } = 0.5f;
     public SeamMode Seam { get; init; } = SeamMode.XY;
+
+    /// <summary>オクターブごとの周波数倍率。周期を保つため整数。</summary>
+    public int Lacunarity { get; init; } = 2;
+    public FractalMode Fractal { get; init; } = FractalMode.Fbm;
+    public WorleyMode Worley { get; init; } = WorleyMode.F1;
+
+    /// <summary>ドメインワープ量 (UV 単位)。0 で無効。</summary>
+    public float WarpStrength { get; init; }
+
+    public float Contrast { get; init; } = 1f;
+    public float Brightness { get; init; }
+    public bool Invert { get; init; }
 }
 
 public sealed record PreviewSettings
@@ -56,6 +83,16 @@ internal struct NoiseConstants
     public float Persistence;
     public uint SeamMode;
     public uint NoiseType;
+
+    public float Lacunarity;
+    public uint FractalMode;
+    public uint WorleyMode;
+    public float WarpStrength;
+
+    public float Contrast;
+    public float Brightness;
+    public uint Invert;
+    public float Padding;
 }
 
 // cbuffer PreviewParams (Shaders/Preview.hlsl) と同じレイアウト

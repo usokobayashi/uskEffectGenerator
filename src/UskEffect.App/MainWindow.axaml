@@ -2,7 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="using:UskEffect.App.Controls"
         x:Class="UskEffect.App.MainWindow"
-        Title="uskEffect — Phase 1 GPU/UI 検証"
+        Title="uskEffect"
         Width="1280" Height="800" MinWidth="800" MinHeight="500"
         WindowStartupLocation="CenterScreen" WindowState="Maximized">
 
@@ -33,10 +33,34 @@
       <StackPanel Margin="14">
         <TextBlock Text="ノイズ生成" FontWeight="Bold" FontSize="15" />
 
+        <TextBlock Classes="label" Text="プリセット" />
+        <ComboBox x:Name="PresetBox" PlaceholderText="プリセットを選択" />
+        <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,6,0,0">
+          <TextBox x:Name="PresetNameBox" PlaceholderText="保存する名前" />
+          <Button Grid.Column="1" x:Name="SavePresetButton" Content="保存" Margin="6,0,0,0" />
+          <Button Grid.Column="2" x:Name="DeletePresetButton" Content="削除" Margin="6,0,0,0" />
+        </Grid>
+        <TextBlock x:Name="PresetMessage" FontSize="11" Opacity="0.8" TextWrapping="Wrap" Margin="0,4,0,0" IsVisible="False" />
+
         <TextBlock Classes="label" Text="種類" />
         <ComboBox x:Name="NoiseTypeBox" SelectedIndex="0">
           <ComboBoxItem Content="Perlin" />
           <ComboBoxItem Content="Worley" />
+          <ComboBoxItem Content="Simplex" />
+        </ComboBox>
+
+        <TextBlock Classes="label" Text="Worley 距離" />
+        <ComboBox x:Name="WorleyModeBox" SelectedIndex="0">
+          <ComboBoxItem Content="F1（最近点）" />
+          <ComboBoxItem Content="F2（2 番目）" />
+          <ComboBoxItem Content="F2 − F1（セル境界）" />
+        </ComboBox>
+
+        <TextBlock Classes="label" Text="フラクタル" />
+        <ComboBox x:Name="FractalBox" SelectedIndex="0">
+          <ComboBoxItem Content="FBM" />
+          <ComboBoxItem Content="Ridged" />
+          <ComboBoxItem Content="Turbulence" />
         </ComboBox>
 
         <TextBlock Classes="label" Text="解像度" />
@@ -58,6 +82,20 @@
 
         <TextBlock Classes="label" x:Name="PersistenceLabel" Text="Persistence" />
         <Slider x:Name="PersistenceSlider" Minimum="0" Maximum="1" Value="0.5" />
+
+        <TextBlock Classes="label" x:Name="LacunarityLabel" Text="Lacunarity" />
+        <Slider x:Name="LacunaritySlider" Minimum="2" Maximum="4" Value="2" TickFrequency="1" IsSnapToTickEnabled="True" />
+
+        <TextBlock Classes="label" x:Name="WarpLabel" Text="ドメインワープ" />
+        <Slider x:Name="WarpSlider" Minimum="0" Maximum="0.5" Value="0" />
+
+        <TextBlock Classes="label" x:Name="ContrastLabel" Text="コントラスト" />
+        <Slider x:Name="ContrastSlider" Minimum="0" Maximum="3" Value="1" />
+
+        <TextBlock Classes="label" x:Name="BrightnessLabel" Text="明るさ" />
+        <Slider x:Name="BrightnessSlider" Minimum="-1" Maximum="1" Value="0" />
+
+        <CheckBox x:Name="InvertBox" Content="反転" Margin="0,6,0,0" />
 
         <TextBlock Classes="label" Text="シームレス" />
         <ComboBox x:Name="SeamBox" SelectedIndex="3">

@@ -3,4 +3,7 @@
     <Project Path="src/UskEffect.App/UskEffect.App.csproj" />
     <Project Path="src/UskEffect.Graphics/UskEffect.Graphics.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/UskEffect.Tests/UskEffect.Tests.csproj" />
+  </Folder>
 </Solution>

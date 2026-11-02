@@ -4,7 +4,7 @@ using Vortice.DXGI;
 namespace UskEffect.Graphics;
 
 /// <summary>Compute Shader で周期ノイズを R32_Float テクスチャへ生成する。</summary>
-public sealed class NoiseGenerator : IDisposable
+public sealed unsafe class NoiseGenerator : IDisposable
 {
     private const int ThreadGroupSize = 8;
 
@@ -54,6 +54,13 @@ public sealed class NoiseGenerator : IDisposable
             Persistence = settings.Persistence,
             SeamMode = (uint)settings.Seam,
             NoiseType = (uint)settings.Type,
+            Lacunarity = Math.Clamp(settings.Lacunarity, 1, 8),
+            FractalMode = (uint)settings.Fractal,
+            WorleyMode = (uint)settings.Worley,
+            WarpStrength = Math.Max(0f, settings.WarpStrength),
+            Contrast = settings.Contrast,
+            Brightness = settings.Brightness,
+            Invert = settings.Invert ? 1u : 0u,
         };
 
         var context = _gpu.Context;
@@ -68,6 +75,43 @@ public sealed class NoiseGenerator : IDisposable
         // SRV として読む前に UAV を外す
         context.CSSetUnorderedAccessView(0, null);
         context.CSSetShader(null);
+    }
+
+    /// <summary>生成結果を CPU へ読み戻す (行優先、Width × Height)。テストと画像出力用で、GPU の完了を待つ。</summary>
+    public float[] ReadPixels()
+    {
+        if (_texture is null)
+            return [];
+
+        using var staging = _gpu.Device.CreateTexture2D(new Texture2DDescription
+        {
+            Width = (uint)Width,
+            Height = (uint)Height,
+            MipLevels = 1,
+            ArraySize = 1,
+            Format = Format.R32_Float,
+            SampleDescription = new SampleDescription(1, 0),
+            Usage = ResourceUsage.Staging,
+            CPUAccessFlags = CpuAccessFlags.Read,
+        });
+        var context = _gpu.Context;
+        context.CopyResource(staging, _texture);
+
+        var mapped = context.Map(staging, 0, MapMode.Read);
+        try
+        {
+            var pixels = new float[Width * Height];
+            for (int y = 0; y < Height; y++)
+            {
+                var row = new ReadOnlySpan<float>((void*)(mapped.DataPointer + (nint)(y * mapped.RowPitch)), Width);
+                row.CopyTo(pixels.AsSpan(y * Width, Width));
+            }
+            return pixels;
+        }
+        finally
+        {
+            context.Unmap(staging, 0);
+        }
     }
 
     private void EnsureTexture(int width, int height)
