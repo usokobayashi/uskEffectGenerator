@@ -4,13 +4,13 @@ namespace UskEffect.Graphics;
 
 /// <summary>極座標表示の設定 (FR-03)。半径は外接円を 1 とした比率。</summary>
 public readonly record struct PolarSettings(
-    float InnerRadius = 0.3f,
+    float InnerRadius = 0f,
     float OuterRadius = 1f,
     float RotationDegrees = 0f,
     bool FlipAngular = false,
     bool FlipRadial = false)
 {
-    public PolarSettings() : this(0.3f) { }
+    public PolarSettings() : this(0f) { }
 }
 
 /// <summary>

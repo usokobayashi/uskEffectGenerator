@@ -56,7 +56,7 @@
         <Button.Flyout>
           <Flyout Placement="BottomEdgeAlignedRight">
             <StackPanel Width="{StaticResource Ue.Size.PolarPopup}" Spacing="{StaticResource Ue.Gap.Row}">
-              <ui:SliderField x:Name="InnerRadiusField" Label="{DynamicResource S.Polar.Inner}" Minimum="0" Maximum="0.95" Value="0.3" Step="0.01" />
+              <ui:SliderField x:Name="InnerRadiusField" Label="{DynamicResource S.Polar.Inner}" Minimum="0" Maximum="0.95" Value="0" Step="0.01" />
               <ui:SliderField x:Name="OuterRadiusField" Label="{DynamicResource S.Polar.Outer}" Minimum="0.05" Maximum="1" Value="1" Step="0.01" />
               <ui:SliderField x:Name="RotationField" Label="{DynamicResource S.Polar.Rotation}" Minimum="0" Maximum="360" Value="0" Step="1" ValueFormat="0°" />
               <DockPanel>

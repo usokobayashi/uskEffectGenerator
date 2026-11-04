@@ -82,6 +82,7 @@
   <x:String x:Key="S.Brush.Color">色</x:String>
   <x:String x:Key="S.Paint.ClearMenu">このレイヤーを消去</x:String>
   <x:String x:Key="S.Paint.LayerHidden">表示していないレイヤーには描けません。</x:String>
+  <x:String x:Key="S.Paint.NeedPaintMode">描くには、右上を「ペイント」に切り替えてください。</x:String>
   <x:String x:Key="S.Brush.PressureSize">筆圧で大きさを変える</x:String>
   <x:String x:Key="S.Brush.PressureOpacity">筆圧で濃さを変える</x:String>
   <x:String x:Key="S.Paint.NotInEffect">エフェクトの表示では描けません。矩形・極座標・シームの表示で描けます。</x:String>
@@ -223,6 +224,8 @@
   <x:String x:Key="S.Status.Starting">GPU 初期化中...</x:String>
   <x:String x:Key="S.Status.GpuFailed">GPU 初期化失敗: {0}</x:String>
   <x:String x:Key="S.Status.RenderFailed">描画エラー: {0}</x:String>
+  <x:String x:Key="S.Status.DeviceLost">GPU が応答しなくなりました。復帰を試みています。</x:String>
+  <x:String x:Key="S.Status.DeviceRecovered">GPU から復帰しました。元に戻すの履歴は消え、直前の描画は失われた場合があります。</x:String>
   <x:String x:Key="S.Status.ReloadShaders">シェーダー再読込</x:String>
   <x:String x:Key="S.Status.ShaderFolder">シェーダーのフォルダ: {0}</x:String>
   <x:String x:Key="S.Status.ShaderErrors">シェーダーエラー</x:String>

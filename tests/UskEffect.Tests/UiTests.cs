@@ -545,6 +545,27 @@ public sealed class UiTests(UiSession ui) : IClassFixture<UiSession>
     });
 
     [Fact]
+    public Task CanvasPress_ExplainsHowToPaint_OnlyWhenItCannotPaint() => ui.Run(() =>
+    {
+        var window = Open();
+        window.ExplainWhyNotPainting();
+        Assert.Contains("ペイント", window.Status.MessageText.Text);
+
+        window.Status.MessageText.Text = "";
+        window.Top.ModeSegment.SelectedIndex = 1;
+        Settle();
+        window.ExplainWhyNotPainting();
+        Assert.Equal("", window.Status.MessageText.Text);
+
+        window.Strip.Mode = UskEffect.Graphics.PreviewMode.Effect;
+        Settle();
+        window.Status.MessageText.Text = "";
+        window.ExplainWhyNotPainting();
+        Assert.Contains("エフェクト", window.Status.MessageText.Text);
+        CloseWindow(window);
+    });
+
+    [Fact]
     public Task SeamFix_Buttons_SwitchToOffsetView_AndBlendLocksFileOperations() => ui.Run(() =>
     {
         var window = Open();

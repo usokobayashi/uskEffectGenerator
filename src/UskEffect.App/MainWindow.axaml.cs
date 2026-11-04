@@ -21,6 +21,7 @@ public partial class MainWindow : Window
     private readonly CanvasNavigator? _navigator;
     private Thread? _renderThread;
     private RenderStats _lastStats;
+    private int _shownRecoveries;
     private bool _suppressApply;
     private volatile bool _closed;
 
@@ -189,6 +190,7 @@ public partial class MainWindow : Window
         var engine = _engine!;
         var fpsClock = Stopwatch.StartNew();
         int frames = 0;
+        bool lostShown = false;
 
         while (!_closed)
         {
@@ -199,13 +201,19 @@ public partial class MainWindow : Window
             {
                 if (!engine.RenderFrame(width, height, out stats))
                 {
-                    Thread.Sleep(16); // 描画先がない (最小化・HWND 作成前)
+                    if (engine.IsDeviceLost && !lostShown)
+                    {
+                        lostShown = true;
+                        Dispatcher.UIThread.Post(() => Status.ShowMessage(Loc.T("S.Status.DeviceLost")));
+                    }
+                    Thread.Sleep(16); // 描画先がない (最小化・HWND 作成前)、または GPU の復帰待ち
                     continue;
                 }
+                lostShown = false;
             }
             catch (Exception ex)
             {
-                // デバイスロスト等。復帰処理は未実装
+                // デバイスロストはエンジンが復帰する。ここに来るのはそれ以外の失敗
                 Dispatcher.UIThread.Post(() => Status.ShowFailure(Loc.F("S.Status.RenderFailed", ex.Message)));
                 return;
             }
@@ -229,6 +237,13 @@ public partial class MainWindow : Window
     {
         if (_closed)
             return;
+
+        if (stats.DeviceRecoveries != _shownRecoveries)
+        {
+            _shownRecoveries = stats.DeviceRecoveries;
+            RefreshLayers();
+            Status.ShowMessage(Loc.T("S.Status.DeviceRecovered"));
+        }
 
         Status.ShowStats(stats, fps);
         SeamTab.ShowAnalysis(stats.Seam, stats.SeamAnalysisPending);

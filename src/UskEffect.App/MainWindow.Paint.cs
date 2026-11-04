@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using UskEffect.App.Controls;
+using UskEffect.App.Interop;
 using UskEffect.App.Locale;
 using UskEffect.Graphics;
 using UskEffect.Graphics.Painting;
@@ -35,6 +36,11 @@ public partial class MainWindow
         Rail.ToolChanged += () => Strip.Tool = Rail.Tool;
         Strip.ClearPaintRequested += ClearActiveLayer;
         Strip.Changed += ShowPaintAvailability;
+        Viewport.HostPointerDown += (button, _, _) =>
+        {
+            if (button == 0 && !Win32.IsSpaceDown())
+                ExplainWhyNotPainting();
+        };
         AddHandler(KeyDownEvent, OnPaintKeyDown, RoutingStrategies.Tunnel);
         AddHandler(KeyDownEvent, OnUndoKeyDown, RoutingStrategies.Tunnel);
 
@@ -168,11 +174,24 @@ public partial class MainWindow
             _engine.Cursor = null;
     }
 
+    private string? PaintBlockedMessage =>
+        !IsPaintMode ? "S.Paint.NeedPaintMode"
+        : Strip.Mode == PreviewMode.Effect ? "S.Paint.NotInEffect"
+        : !IsActiveLayerVisible ? "S.Paint.LayerHidden"
+        : null;
+
+    // キャンバスを押しても描けないときは、何も起きないままにせず理由を出す
+    internal void ExplainWhyNotPainting()
+    {
+        if (PaintBlockedMessage is { } message)
+            Status.ShowMessage(Loc.T(message));
+    }
+
     private void ShowPaintAvailability()
     {
         if (!IsPaintMode)
             return;
-        string? message = Strip.Mode == PreviewMode.Effect ? "S.Paint.NotInEffect" : !IsActiveLayerVisible ? "S.Paint.LayerHidden" : null;
+        string? message = PaintBlockedMessage;
         if (message is null)
             return;
         Status.ShowMessage(Loc.T(message));

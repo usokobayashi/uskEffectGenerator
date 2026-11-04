@@ -177,6 +177,9 @@ public sealed unsafe class PaintRenderer : IDisposable
 
     public ID3D11ShaderResourceView? CompositeView { get; private set; }
 
+    /// <summary>継ぎ目の自動ブレンドの確認中か。この間のレイヤーはまだ確定していない。</summary>
+    public bool IsPreviewingBlend => _previewingBlend;
+
     public IReadOnlyList<LayerState> Layers { get; private set; } = [];
     public int ActiveLayerId => _activeId;
     public bool CanUndo => _undo.Count > 0 || HasEdit;

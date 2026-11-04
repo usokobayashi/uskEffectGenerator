@@ -18,7 +18,8 @@ public readonly record struct RenderStats(
     double FrameMilliseconds,
     string? ShaderErrors,
     SeamAnalysis? Seam,
-    bool SeamAnalysisPending);
+    bool SeamAnalysisPending,
+    int DeviceRecoveries = 0);
 
 /// <summary>ブラシの大きさを示す輪の位置。画面の画素と、テクスチャの画素での直径。</summary>
 public sealed record PaintCursor(int X, int Y, double Diameter);
@@ -29,15 +30,16 @@ public sealed record PaintCursor(int X, int Y, double Diameter);
 /// D3D11 の即時コンテキストはスレッドセーフでないため、D3D を触る公開メソッドは _sync で直列化する。
 /// 設定はイミュータブルな record の差し替えで受け取るので、UI スレッドからロックなしで設定できる。
 /// HLSL ファイルの変更を監視し、次フレームで再コンパイルする。
+/// GPU を失ったら (デバイスロスト) 作り直す。GPU 上のレイヤーは読めなくなるので、控えを CPU 側に持って戻す。
 /// </summary>
 public sealed class RenderEngine : IDisposable
 {
-    private readonly GpuDevice _gpu;
-    private readonly NoiseGenerator _noise;
-    private readonly PreviewRenderer _preview;
-    private readonly EffectRenderer _effect;
-    private readonly PaintRenderer _paint;
-    private readonly GpuTimer _timer;
+    private GpuDevice _gpu;
+    private NoiseGenerator _noise;
+    private PreviewRenderer _preview;
+    private EffectRenderer _effect;
+    private PaintRenderer _paint;
+    private GpuTimer _timer;
     private readonly FileSystemWatcher? _watcher;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private readonly string _noiseShaderPath;
@@ -55,6 +57,27 @@ public sealed class RenderEngine : IDisposable
     private readonly object _sync = new();
 
     private SwapChainTarget? _target;
+    private IntPtr _surfaceHwnd;
+    private int _surfaceWidth, _surfaceHeight;
+
+    // デバイスロストからの復帰。作り直せない間 (GPU のリセット中) は少し待ってやり直す
+    private volatile bool _deviceLost;
+    private bool _deviceObjectsReleased;
+    private TimeSpan _nextRecovery;
+    private int _deviceRecoveries;
+
+    // 復帰に使うレイヤーの控え。GPU が読めなくなった後の保存にも使う
+    private IReadOnlyList<LayerData>? _layerBackup;
+    private bool _backupPending;
+
+    /// <summary>GPU を失って、まだ復帰していないか。</summary>
+    public bool IsDeviceLost => _deviceLost;
+
+    internal TimeSpan RecoveryRetryInterval { get; set; } = TimeSpan.FromSeconds(1);
+
+    /// <summary>テスト用。デバイスの作り直しを差し替える。</summary>
+    internal Func<GpuDevice>? DeviceFactory { get; set; }
+
     private volatile NoiseSettings _noiseSettings = new();
     private volatile bool _noiseDirty = true;
     private volatile bool _shadersDirty = true;
@@ -110,11 +133,7 @@ public sealed class RenderEngine : IDisposable
         _effectShaderPath = Path.Combine(shaderDirectory, "Effect.hlsl");
         _paintShaderPath = Path.Combine(shaderDirectory, "Paint", "Paint.hlsl");
 
-#if DEBUG
-        _gpu = new GpuDevice(enableDebugLayer: true);
-#else
-        _gpu = new GpuDevice();
-#endif
+        _gpu = CreateDevice();
         _noise = new NoiseGenerator(_gpu);
         _preview = new PreviewRenderer(_gpu);
         _effect = new EffectRenderer(_gpu);
@@ -135,10 +154,27 @@ public sealed class RenderEngine : IDisposable
         }
     }
 
+    private GpuDevice CreateDevice()
+    {
+        if (DeviceFactory is { } factory)
+            return factory();
+#if DEBUG
+        return new GpuDevice(enableDebugLayer: true);
+#else
+        return new GpuDevice();
+#endif
+    }
+
     public void AttachSurface(IntPtr hwnd, int width, int height)
     {
         lock (_sync)
         {
+            _surfaceHwnd = hwnd;
+            _surfaceWidth = width;
+            _surfaceHeight = height;
+            // GPU を失っている間は覚えておくだけ。復帰したときに作る
+            if (!EnsureDevice())
+                return;
             DetachSurfaceCore();
             _target = new SwapChainTarget(_gpu, hwnd, width, height);
         }
@@ -147,7 +183,117 @@ public sealed class RenderEngine : IDisposable
     public void DetachSurface()
     {
         lock (_sync)
+        {
+            _surfaceHwnd = IntPtr.Zero;
             DetachSurfaceCore();
+        }
+    }
+
+    // GPU が使えるか確かめ、失っていたら作り直す。作り直せなければ false
+    private bool EnsureDevice()
+    {
+        if (IsDeviceRemoved())
+            _deviceLost = true;
+        return !_deviceLost || TryRecoverDevice();
+    }
+
+    private bool IsDeviceRemoved() => !_deviceLost && _gpu.Device.DeviceRemovedReason.Failure;
+
+    /// <summary>テスト用。実際の GPU のリセットは起こせないので、失った状態だけを作る。</summary>
+    internal void SimulateDeviceLoss()
+    {
+        lock (_sync)
+            _deviceLost = true;
+    }
+
+    private bool TryRecoverDevice()
+    {
+        if (_clock.Elapsed < _nextRecovery)
+            return false;
+        _nextRecovery = _clock.Elapsed + RecoveryRetryInterval;
+
+        // フリップモデルは古いスワップチェーンを消してからでないと同じ窓に作れない
+        ReleaseDeviceObjects();
+
+        var created = new List<IDisposable>();
+        T Track<T>(T item) where T : IDisposable
+        {
+            created.Add(item);
+            return item;
+        }
+
+        try
+        {
+            var gpu = Track(CreateDevice());
+            var noise = Track(new NoiseGenerator(gpu));
+            var preview = Track(new PreviewRenderer(gpu));
+            var effect = Track(new EffectRenderer(gpu));
+            var paint = Track(new PaintRenderer(gpu));
+            var timer = Track(new GpuTimer(gpu));
+            paint.SetLayers(_layerBackup);
+
+            var image = _image is { } source ? CreateImageTexture(gpu, source) : default;
+            if (image.Texture is not null)
+            {
+                Track(image.Texture);
+                Track(image.View!);
+            }
+            var target = _surfaceHwnd != IntPtr.Zero ? Track(new SwapChainTarget(gpu, _surfaceHwnd, _surfaceWidth, _surfaceHeight)) : null;
+
+            (_gpu, _noise, _preview, _effect, _paint, _timer) = (gpu, noise, preview, effect, paint, timer);
+            (_imageTexture, _imageView) = image;
+            _target = target;
+        }
+        catch (Exception)
+        {
+            created.Reverse();
+            created.ForEach(DisposeQuietly);
+            return false;
+        }
+
+        _deviceObjectsReleased = false;
+        _deviceLost = false;
+        _deviceRecoveries++;
+        _shadersDirty = true;
+        _noiseDirty = true;
+        _analysisPending = true;
+        _lastNoiseGenerated = _clock.Elapsed;
+        return true;
+    }
+
+    // 失ったデバイスの後始末で例外が出ても、復帰は止めない
+    private static void DisposeQuietly(IDisposable item)
+    {
+        try
+        {
+            item.Dispose();
+        }
+        catch (Exception)
+        {
+        }
+    }
+
+    private void ReleaseDeviceObjects()
+    {
+        if (_deviceObjectsReleased)
+            return;
+        _deviceObjectsReleased = true;
+
+        try
+        {
+            DetachSurfaceCore();
+        }
+        catch (Exception)
+        {
+            _target = null;
+        }
+        foreach (var item in new IDisposable?[] { _imageView, _imageTexture, _timer, _paint, _effect, _preview, _noise, _gpu })
+        {
+            if (item is not null)
+                DisposeQuietly(item);
+        }
+        _imageView = null;
+        _imageTexture = null;
     }
 
     private void DetachSurfaceCore()
@@ -170,6 +316,13 @@ public sealed class RenderEngine : IDisposable
             if (ReferenceEquals(image, _image))
                 return;
 
+            // GPU を失っている間は覚えておくだけ。復帰したときに作る
+            if (!EnsureDevice())
+            {
+                _image = image;
+                return;
+            }
+
             _gpu.Context.PSSetShaderResource(0, null!);
             _imageView?.Dispose();
             _imageTexture?.Dispose();
@@ -178,33 +331,36 @@ public sealed class RenderEngine : IDisposable
             _image = image;
 
             if (image is not null)
-            {
-                var pinned = System.Runtime.InteropServices.GCHandle.Alloc(image.Rgba, System.Runtime.InteropServices.GCHandleType.Pinned);
-                try
-                {
-                    _imageTexture = _gpu.Device.CreateTexture2D(new Texture2DDescription
-                    {
-                        Width = (uint)image.Width,
-                        Height = (uint)image.Height,
-                        MipLevels = 1,
-                        ArraySize = 1,
-                        Format = Format.R8G8B8A8_UNorm,
-                        SampleDescription = new SampleDescription(1, 0),
-                        Usage = ResourceUsage.Immutable,
-                        BindFlags = BindFlags.ShaderResource,
-                    }, new SubresourceData(pinned.AddrOfPinnedObject(), (uint)(image.Width * 4)));
-                }
-                finally
-                {
-                    pinned.Free();
-                }
-                _imageView = _gpu.Device.CreateShaderResourceView(_imageTexture);
-            }
+                (_imageTexture, _imageView) = CreateImageTexture(_gpu, image);
 
             // 継ぎ目の解析をやり直す
             _paint.MarkAllDirty();
             _analysisPending = true;
             _lastNoiseGenerated = _clock.Elapsed;
+        }
+    }
+
+    private static (ID3D11Texture2D? Texture, ID3D11ShaderResourceView? View) CreateImageTexture(GpuDevice gpu, ImageData image)
+    {
+        var pinned = System.Runtime.InteropServices.GCHandle.Alloc(image.Rgba, System.Runtime.InteropServices.GCHandleType.Pinned);
+        try
+        {
+            var texture = gpu.Device.CreateTexture2D(new Texture2DDescription
+            {
+                Width = (uint)image.Width,
+                Height = (uint)image.Height,
+                MipLevels = 1,
+                ArraySize = 1,
+                Format = Format.R8G8B8A8_UNorm,
+                SampleDescription = new SampleDescription(1, 0),
+                Usage = ResourceUsage.Immutable,
+                BindFlags = BindFlags.ShaderResource,
+            }, new SubresourceData(pinned.AddrOfPinnedObject(), (uint)(image.Width * 4)));
+            return (texture, gpu.Device.CreateShaderResourceView(texture));
+        }
+        finally
+        {
+            pinned.Free();
         }
     }
 
@@ -252,9 +408,12 @@ public sealed class RenderEngine : IDisposable
     {
         lock (_sync)
         {
+            if (!EnsureDevice())
+                return;
             EnsureSourceReady();
             action();
             _analysisPending = true;
+            _backupPending = true;
             _lastNoiseGenerated = _clock.Elapsed;
         }
     }
@@ -265,6 +424,10 @@ public sealed class RenderEngine : IDisposable
         lock (_sync)
         {
             while (_paintCommands.TryDequeue(out _)) { }
+            _layerBackup = layers;
+            _backupPending = false;
+            if (!EnsureDevice())
+                return;
             // 描いていないプロジェクトを開くだけで GPU に触らない
             if (layers is null && _paint.IsPristine)
                 return;
@@ -277,16 +440,26 @@ public sealed class RenderEngine : IDisposable
     {
         lock (_sync)
         {
+            RequireDevice();
             EnsureSourceReady();
             return _paint.HasPaint ? _paint.ReadComposite() : null;
         }
     }
 
-    /// <summary>レイヤーを読み戻す (保存用)。何もしていなければ null。</summary>
+    // 書き出しは GPU がないと作れない。黙って描いた内容のない画像を出さないよう止める
+    private void RequireDevice()
+    {
+        if (!EnsureDevice())
+            throw new InvalidOperationException("GPU が復帰していないため読み取れません。少し待ってからやり直してください。");
+    }
+
+    /// <summary>レイヤーを読み戻す (保存用)。何もしていなければ null。GPU を失っている間は最後の控えを返す。</summary>
     public IReadOnlyList<LayerData>? ReadLayers()
     {
         lock (_sync)
         {
+            if (!EnsureDevice())
+                return _layerBackup;
             // 何もしていないプロジェクトの保存では GPU に触らない
             if (_paint.IsPristine && _paintCommands.IsEmpty)
                 return null;
@@ -371,6 +544,7 @@ public sealed class RenderEngine : IDisposable
         if (changed)
         {
             _analysisPending = true;
+            _backupPending = true;
             _lastNoiseGenerated = _clock.Elapsed;
         }
         if (_paint.HasPaint)
@@ -381,7 +555,20 @@ public sealed class RenderEngine : IDisposable
     public bool RenderFrame(int width, int height, out RenderStats stats)
     {
         lock (_sync)
-            return RenderFrameCore(width, height, out stats);
+        {
+            stats = default;
+            if (!EnsureDevice())
+                return false;
+            try
+            {
+                return RenderFrameCore(width, height, out stats);
+            }
+            catch (Exception) when (IsDeviceRemoved())
+            {
+                _deviceLost = true;
+                return false;
+            }
+        }
     }
 
     private bool RenderFrameCore(int width, int height, out RenderStats stats)
@@ -451,7 +638,7 @@ public sealed class RenderEngine : IDisposable
         stats = new RenderStats(_gpu.AdapterName, _image?.Width ?? _noise.Width, _image?.Height ?? _noise.Height,
             _target?.Width ?? 0, _target?.Height ?? 0,
             _timer.ComputeMilliseconds, _timer.FrameMilliseconds, errors,
-            _seamAnalysis, _analysisPending || _analysisTask is { IsCompleted: false });
+            _seamAnalysis, _analysisPending || _analysisTask is { IsCompleted: false }, _deviceRecoveries);
         return rendered;
     }
 
@@ -463,6 +650,7 @@ public sealed class RenderEngine : IDisposable
     {
         lock (_sync)
         {
+            RequireDevice();
             if (_shadersDirty)
                 LoadShaders();
             if (_noiseErrors is not null)
@@ -480,6 +668,25 @@ public sealed class RenderEngine : IDisposable
         }
     }
 
+    // 操作が落ち着いたときに取る。自動ブレンドの確認中はまだ確定していないので取らない
+    private void BackupLayers()
+    {
+        if (!_backupPending || _paint.IsPreviewingBlend)
+            return;
+        _backupPending = false;
+        _layerBackup = _paint.IsPristine ? null : _paint.ReadLayers();
+    }
+
+    /// <summary>テスト用。溜まった操作を済ませて控えを取る。</summary>
+    internal void BackupLayersNow()
+    {
+        lock (_sync)
+        {
+            EnsureSourceReady();
+            BackupLayers();
+        }
+    }
+
     private void StartSeamAnalysisIfIdle()
     {
         if (!_analysisPending || _clock.Elapsed - _lastNoiseGenerated < AnalysisDelay)
@@ -488,6 +695,7 @@ public sealed class RenderEngine : IDisposable
             return; // 前の解析が終わってから。終わった時点でまだ pending なら次フレームで再解析する
 
         _analysisPending = false;
+        BackupLayers();
         if (_paint.HasPaint && _paint.ReadComposite() is { } painted)
         {
             _analysisTask = Task.Run(() => _seamAnalysis = SeamAnalyzer.Analyze(painted.ToLuminance(), painted.Width, painted.Height));
@@ -511,16 +719,6 @@ public sealed class RenderEngine : IDisposable
         _watcher?.Dispose();
         _analysisTask?.Wait();
         lock (_sync)
-        {
-            DetachSurfaceCore();
-            _imageView?.Dispose();
-            _imageTexture?.Dispose();
-            _timer.Dispose();
-            _paint.Dispose();
-            _effect.Dispose();
-            _preview.Dispose();
-            _noise.Dispose();
-            _gpu.Dispose();
-        }
+            ReleaseDeviceObjects();
     }
 }
