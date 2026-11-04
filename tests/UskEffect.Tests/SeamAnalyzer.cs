@@ -1,4 +1,4 @@
-namespace UskEffect.Graphics.Analysis;
+namespace UskEffect.Tests;
 
 /// <summary>
 /// 1 軸ぶんの継ぎ目評価。境界をまたぐ差分と、境界に隣接する内部の差分の比で表す (要件 §4: 値だけでなく勾配の不連続も検査する)。

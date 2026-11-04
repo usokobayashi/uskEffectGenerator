@@ -507,49 +507,6 @@ public sealed class PaintRenderTests : IDisposable
     }
 
     [Fact]
-    public void SeamBlend_ClosesTheSeam_AndCancelRestoresIt()
-    {
-        _engine.SetImageSource(Split(64));
-        _engine.Paint(Red with { Size = 8 }, [new PaintDab(32, 8)]);
-        var before = _engine.ReadComposite()!;
-        Assert.Equal(255, SeamStep(before, 32));
-
-        _engine.PreviewSeamBlend(new SeamBlendSettings(SeamMode.X, 0.25, 1));
-        var blended = _engine.ReadComposite()!;
-        Assert.True(SeamStep(blended, 32) < 16);
-        Assert.Equal(At(before, 24, 32), At(blended, 24, 32));
-
-        // 設定を変えると、残しておいた状態から作り直す
-        _engine.PreviewSeamBlend(new SeamBlendSettings(SeamMode.X, 0.25, 0));
-        Assert.Equal(255, SeamStep(_engine.ReadComposite()!, 32));
-
-        _engine.PreviewSeamBlend(new SeamBlendSettings(SeamMode.X, 0.25, 1));
-        _engine.CancelSeamBlend();
-        Assert.Equal(before.Rgba, _engine.ReadComposite()!.Rgba);
-    }
-
-    [Fact]
-    public void SeamBlend_Commit_Stays_AndCanBeSaved()
-    {
-        _engine.SetImageSource(Split(64));
-        _engine.PreviewSeamBlend(new SeamBlendSettings(SeamMode.X, 0.25, 1));
-        _engine.CommitSeamBlend();
-        _engine.CancelSeamBlend();
-
-        Assert.True(SeamStep(_engine.ReadComposite()!, 32) < 16);
-        Assert.NotNull(_engine.ReadLayers());
-    }
-
-    [Fact]
-    public void SeamBlend_Cancel_WithNothingPainted_ReadsAsUnpainted()
-    {
-        _engine.SetImageSource(Split(64));
-        _engine.PreviewSeamBlend(new SeamBlendSettings());
-        _engine.CancelSeamBlend();
-        Assert.Null(_engine.ReadComposite());
-    }
-
-    [Fact]
     public void Layers_StackInOrder_WithOpacityAndVisibility()
     {
         _engine.SetImageSource(Split(64));
@@ -693,18 +650,6 @@ public sealed class PaintRenderTests : IDisposable
     }
 
     [Fact]
-    public void Undo_AfterABlendCommit_RemovesTheBlend()
-    {
-        _engine.SetImageSource(Split(64));
-        _engine.PreviewSeamBlend(new SeamBlendSettings(SeamMode.X, 0.25, 1));
-        _engine.CommitSeamBlend();
-        Assert.True(SeamStep(_engine.ReadComposite()!, 32) < 16);
-
-        _engine.Undo();
-        Assert.Null(_engine.ReadComposite());
-    }
-
-    [Fact]
     public void Resolution_Change_KeepsThePaint_ButClearsHistory()
     {
         _engine.Noise = new NoiseSettings { Resolution = 64 };
@@ -760,7 +705,7 @@ public sealed class PaintRenderTests : IDisposable
             Assert.Null(loaded[1].Image);
             Assert.Equal(0.5f, loaded[1].Opacity);
             Assert.False(loaded[2].Visible);
-            Assert.Equal("レイヤー 2", loaded[1].Name);
+            Assert.Equal("ペイント 2", loaded[1].Name);
 
             using var other = new RenderEngine(Path.Combine(NoiseFixture.FindRepositoryRoot(), "Shaders"));
             other.SetImageSource(Split(64));
@@ -818,62 +763,6 @@ public sealed class PaintRenderTests : IDisposable
     }
 
     // ノイズ生成 → レイヤー → 矩形と極座標への描画 → 継ぎ目の修正 → 元に戻す → 保存 → 読込 → 書き出し
-    [Fact]
-    public void Integration_FromNoiseToExport()
-    {
-        string dir = Path.Combine(Path.GetTempPath(), $"uskfx-flow-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(dir);
-        try
-        {
-            _engine.Noise = new NoiseSettings { Resolution = 128, Seam = SeamMode.XY };
-
-            var white = Red with { Color = Vector3.One, Size = 24 };
-            _engine.Paint(white, [new PaintDab(32, 64)]);
-            _engine.EndStroke();
-
-            _engine.AddLayer();
-            var ring = new PolarStamp(0.25, 1, false, 1, 1, 128);
-            _engine.Paint(Red with { Size = 16 }, [new PaintDab(96, 64, 0.625)], ring);
-            _engine.EndStroke();
-
-            _engine.PreviewSeamBlend(new SeamBlendSettings(SeamMode.XY, 0.05, 1));
-            _engine.CommitSeamBlend();
-
-            // 間違えたストロークを元に戻す
-            _engine.Paint(Red with { Size = 48 }, [new PaintDab(64, 20)]);
-            _engine.EndStroke();
-            _engine.Undo();
-
-            var before = _engine.ReadComposite()!;
-            Assert.Equal((255, 255, 255, 255), At(before, 32, 64));
-            Assert.Equal((255, 0, 0, 255), At(before, 96, 64));
-            Assert.Equal(At(before, 64, 20).R, At(before, 64, 20).G);
-
-            string project = Path.Combine(dir, "flow.uskfx");
-            ProjectFile.Save(project, new ProjectDocument { Noise = _engine.Noise, Layers = _engine.ReadLayers() });
-
-            using var other = new RenderEngine(Path.Combine(NoiseFixture.FindRepositoryRoot(), "Shaders"));
-            var loaded = ProjectFile.Load(project);
-            other.Noise = loaded.Noise;
-            other.SetLayers(loaded.Layers);
-            var after = other.ReadComposite()!;
-            Assert.Equal(2, other.Layers.Count);
-
-            // 保存は 8bit なので、丸めの分だけ差を許す
-            for (int i = 0; i < after.Rgba.Length; i++)
-                Assert.InRange(after.Rgba[i] - before.Rgba[i], -2, 2);
-
-            string png = Path.Combine(dir, "flow.png");
-            UskEffect.Core.Export.TextureExporter.SaveImage(png, after, UskEffect.Core.Export.ExportChannels.RgbaSource);
-            var exported = UskEffect.Core.Imaging.ImageLoader.Load(png);
-            Assert.Equal(after.Rgba, exported.Rgba);
-        }
-        finally
-        {
-            Directory.Delete(dir, recursive: true);
-        }
-    }
-
     [Fact]
     public void Layer_RoundTripsThroughAProjectFile()
     {

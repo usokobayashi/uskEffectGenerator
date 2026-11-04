@@ -1,19 +1,44 @@
-<!-- レイヤー (FR-15)。上にあるものほど手前。一番下の元の画像は固定 -->
+<!-- レイヤー (FR-15)。左のバーのアイコンの隣に開く。上にあるものほど手前 -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="using:UskEffect.App.Controls.Ui"
-             x:Class="UskEffect.App.Views.LayerPanel">
+             x:Class="UskEffect.App.Views.LayerPanel"
+             Width="{StaticResource Ue.Size.LayerPopup}">
   <StackPanel Spacing="{StaticResource Ue.Gap.Row}">
-    <ui:SliderField x:Name="OpacityField" Label="{DynamicResource S.Layer.Opacity}" Minimum="0" Maximum="1" Value="1" Step="0.01" />
-    <StackPanel x:Name="LayerList" Spacing="{StaticResource Ue.Gap.Tight}" />
-    <Border Classes="layer">
-      <TextBlock Classes="muted" Text="{DynamicResource S.Layer.Source}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-    </Border>
-    <StackPanel Orientation="Horizontal" Spacing="{StaticResource Ue.Gap.Normal}">
-      <Button x:Name="AddButton" Classes="btn" Content="{DynamicResource S.Layer.Add}" />
-      <Button x:Name="DeleteButton" Classes="btn" Content="{DynamicResource S.Layer.Delete}" />
-      <Button x:Name="MoveUpButton" Classes="btn" Content="{DynamicResource S.Layer.MoveUp}" />
-      <Button x:Name="MoveDownButton" Classes="btn" Content="{DynamicResource S.Layer.MoveDown}" />
+    <!-- 追加の選択肢は同じ行に出して、高さを変えない (ポップアップが伸び縮みしてちらつくため) -->
+    <DockPanel>
+      <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="{StaticResource Ue.Gap.Tight}">
+        <Button x:Name="AddButton" Classes="ico" ToolTip.Tip="{DynamicResource S.Layer.Add}" AutomationProperties.Name="{DynamicResource S.Layer.Add}"><Path Classes="stroke icon" Data="{StaticResource Icon.Plus}" /></Button>
+        <Button x:Name="DeleteButton" Classes="ico" ToolTip.Tip="{DynamicResource S.Layer.Delete}" AutomationProperties.Name="{DynamicResource S.Layer.Delete}"><Path Classes="stroke icon" Data="{StaticResource Icon.Trash}" /></Button>
+      </StackPanel>
+      <Panel>
+        <StackPanel x:Name="MoveButtons" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="{StaticResource Ue.Gap.Tight}">
+          <Button x:Name="MoveUpButton" Classes="ico" ToolTip.Tip="{DynamicResource S.Layer.MoveUp}" AutomationProperties.Name="{DynamicResource S.Layer.MoveUp}"><Path Classes="stroke icon" Data="{StaticResource Icon.ArrowUp}" /></Button>
+          <Button x:Name="MoveDownButton" Classes="ico" ToolTip.Tip="{DynamicResource S.Layer.MoveDown}" AutomationProperties.Name="{DynamicResource S.Layer.MoveDown}"><Path Classes="stroke icon" Data="{StaticResource Icon.ArrowDown}" /></Button>
+        </StackPanel>
+        <StackPanel x:Name="AddChoiceRow" Classes="reveal" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="{StaticResource Ue.Gap.Tight}" IsVisible="False">
+          <Button x:Name="AddNoiseButton" Classes="btn" Content="{DynamicResource S.Layer.AddNoise}" />
+          <Button x:Name="AddPaintButton" Classes="btn" Content="{DynamicResource S.Layer.AddPaint}" />
+          <Button x:Name="AddImageButton" Classes="btn" Content="{DynamicResource S.Layer.AddImage}" />
+        </StackPanel>
+      </Panel>
+    </DockPanel>
+    <ScrollViewer Height="{StaticResource Ue.Size.LayerList}" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+      <StackPanel x:Name="LayerList" Spacing="{StaticResource Ue.Gap.Tight}" />
+    </ScrollViewer>
+    <StackPanel x:Name="LayerControls" Classes="reveal" Spacing="{StaticResource Ue.Gap.Row}">
+      <ui:SliderField x:Name="OpacityField" Label="{DynamicResource S.Layer.Opacity}" Minimum="0" Maximum="1" Value="1" Step="0.01" />
+      <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{StaticResource Ue.Gap.Normal}">
+        <TextBlock Classes="rowLabel" Text="{DynamicResource S.Layer.Effect}" />
+        <ComboBox x:Name="BlendBox" Grid.Column="1" SelectedIndex="0" AutomationProperties.Name="{DynamicResource S.Layer.Effect}">
+          <ComboBoxItem Content="{DynamicResource S.Layer.BlendNormal}" />
+          <ComboBoxItem Content="{DynamicResource S.Layer.BlendMultiply}" />
+          <ComboBoxItem Content="{DynamicResource S.Layer.BlendAdd}" />
+          <ComboBoxItem Content="{DynamicResource S.Layer.BlendSubtract}" />
+          <ComboBoxItem Content="{DynamicResource S.Layer.BlendScreen}" />
+          <ComboBoxItem Content="{DynamicResource S.Layer.BlendOverlay}" />
+        </ComboBox>
+      </Grid>
     </StackPanel>
   </StackPanel>
 </UserControl>

@@ -9,10 +9,10 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using UskEffect.App;
 using UskEffect.App.Controls.Ui;
+using UskEffect.App.Views;
 using UskEffect.Core.Export;
 using UskEffect.Core.Project;
 using UskEffect.Graphics;
-using UskEffect.Graphics.Effects;
 
 namespace UskEffect.Tests;
 
@@ -41,6 +41,18 @@ public sealed class UiSession : IDisposable
 public sealed class UiTests(UiSession ui) : IClassFixture<UiSession>
 {
     private static MainWindow Open(double width = 1280, double height = 800)
+    {
+        var window = new MainWindow { WindowState = WindowState.Normal, Width = width, Height = height };
+        window.Show();
+        Settle();
+        // 新規で始めると種類の一覧が開く。テストは Perlin を選んだ状態から始める
+        window.NoiseTab.CloseTypeMenu();
+        window.AddNoiseLayer(NoiseType.Perlin);
+        Settle();
+        return window;
+    }
+
+    private static MainWindow OpenWithoutChoosing(double width = 1280, double height = 800)
     {
         var window = new MainWindow { WindowState = WindowState.Normal, Width = width, Height = height };
         window.Show();
@@ -156,12 +168,8 @@ public sealed class UiTests(UiSession ui) : IClassFixture<UiSession>
 
     private static void ShowEveryTab(MainWindow window, Action<int> check)
     {
-        for (int tab = 0; tab < 4; tab++)
-        {
-            window.TabSegment.SelectedIndex = tab;
-            Settle();
-            check(tab);
-        }
+        Settle();
+        check(0);
     }
 
     [Theory]
@@ -187,8 +195,6 @@ public sealed class UiTests(UiSession ui) : IClassFixture<UiSession>
         try
         {
             var window = Open(800, 500);
-            window.TabSegment.SelectedIndex = 0;
-            Settle();
             AssertLayoutIsClean(window, "長い文言 800x500");
             Capture(window, "long-800x500");
             CloseWindow(window);
@@ -241,20 +247,10 @@ public sealed class UiTests(UiSession ui) : IClassFixture<UiSession>
             },
             Preview = new PreviewSettings
             {
-                Mode = PreviewMode.Effect, ScrollSpeedU = 0.3f, ScrollSpeedV = -0.2f,
+                Mode = PreviewMode.Polar,
                 Polar = new PolarSettings(0.1f, 0.9f, 45f, FlipAngular: true, FlipRadial: true),
-                Heatmap = HeatmapMode.Gradient, HeatThreshold = 7f,
-                TilingX = 2.5f, TilingY = 4f, OffsetX = 0.25f, OffsetY = -0.5f,
             },
-            Effect = new EffectSettings
-            {
-                Mapping = EffectMapping.Polar, Blend = EffectBlend.Alpha, Background = EffectBackground.Gray,
-                Mask = EffectMask.None, Rotation = new(10f, 200f), Scale = new(0.5f, 1.5f), Dissolve = new(0.1f, 0.9f),
-                DissolveEdgeWidth = 0.2f, DissolveEdgeColor = new Vector3(1f, 0f, 0f), Alpha = new(0.8f, 0.2f),
-                Color = new(new Vector3(1f, 0f, 0f), new Vector3(0f, 0f, 1f)), TextureAsAlpha = false,
-            },
-            Timeline = new TimelineSettings { Duration = 3.5, Loop = false },
-            Export = new ExportSettings { Channels = ExportChannels.RgbaWhiteAlpha },
+            Export = new ExportSettings { Output = CompositeOutput.BlackToAlpha },
         };
 
         var window = Open();
@@ -264,8 +260,6 @@ public sealed class UiTests(UiSession ui) : IClassFixture<UiSession>
 
         Assert.Equal(document.Noise, read.Noise);
         Assert.Equal(document.Preview, read.Preview);
-        Assert.Equal(document.Effect, read.Effect);
-        Assert.Equal(document.Timeline, read.Timeline);
         Assert.Equal(document.Export, read.Export);
         CloseWindow(window);
     });
@@ -352,7 +346,9 @@ public sealed class UiTests(UiSession ui) : IClassFixture<UiSession>
     public Task UnavailableFeatures_LookDisabled_ButKeepTheirPlace() => ui.Run(() =>
     {
         var window = Open();
-        var rail = window.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("tool")).ToList();
+        // レイヤーのアイコンはペイントモードでなくても使える
+        var rail = window.GetVisualDescendants().OfType<Button>()
+            .Where(b => b.Classes.Contains("tool") && b != window.Rail.LayerButton).ToList();
         Assert.Equal(7, rail.Count);
         Assert.All(rail, b => Assert.False(b.IsEffectivelyEnabled));
         CloseWindow(window);
@@ -369,15 +365,6 @@ public sealed class UiTests(UiSession ui) : IClassFixture<UiSession>
             Assert.NotNull(icon.Stroke);
             Assert.NotNull(icon.Data);
         });
-        CloseWindow(window);
-    });
-
-    [Fact]
-    public Task Duration_ShowsConfiguredFormat() => ui.Run(() =>
-    {
-        var window = Open();
-        var text = window.Timeline.DurationField.GetVisualDescendants().OfType<TextBox>().Single();
-        Assert.Equal("2.0", text.Text);
         CloseWindow(window);
     });
 
@@ -446,7 +433,7 @@ public sealed class UiTests(UiSession ui) : IClassFixture<UiSession>
     public Task TileView_IsGone_FromSwitcherAndPreviews() => ui.Run(() =>
     {
         var window = Open();
-        Assert.Equal(4, window.Strip.ViewSegment.ItemCount);
+        Assert.Equal(3, window.Strip.ViewSegment.ItemCount);
         window.ApplyDocument(new ProjectDocument { Preview = new PreviewSettings { Mode = PreviewMode.Tile3x3 } });
         Settle();
         // 古いプロジェクトの 3×3 は Tiling 3×3 の矩形として開く
@@ -456,22 +443,42 @@ public sealed class UiTests(UiSession ui) : IClassFixture<UiSession>
     });
 
     [Fact]
-    public Task ImageSource_DisablesNoiseControls_AndCannotBeChosenWithoutImage() => ui.Run(() =>
+    public Task OldProject_WithAnUnusedImage_KeepsItHidden() => ui.Run(() =>
     {
         var window = Open();
-        Assert.False(window.NoiseTab.SourceImageItem.IsEnabled);
-        Assert.True(window.NoiseTab.NoiseControls.IsEnabled);
-
         window.ApplyDocument(new ProjectDocument
         {
             Image = new ImageData(1, 1, [1, 2, 3, 255]),
-            Source = new SourceSettings { Kind = SourceKind.Image, ImageName = "a.png" },
+            Source = new SourceSettings { Kind = SourceKind.Noise, ImageName = "a.png" },
         });
         Settle();
 
-        Assert.True(window.NoiseTab.UseImage);
-        Assert.False(window.NoiseTab.NoiseControls.IsEnabled);
-        Assert.Equal("a.png", window.BuildDocument().Source.ImageName);
+        var layers = window.BuildDocument().Layers!;
+        Assert.Equal(2, layers.Count);
+        Assert.NotNull(layers[0].Noise);
+        Assert.False(layers[1].Visible);
+        Assert.Null(window.BuildDocument().CanvasWidth);
+        CloseWindow(window);
+    });
+
+    [Fact]
+    public Task CustomCanvasSize_RoundTrips_AndChoosingAResolutionClearsIt() => ui.Run(() =>
+    {
+        var window = Open();
+        window.NoiseTab.SetCustomSize(300, 200);
+        var document = window.BuildDocument();
+        Assert.Equal(300, document.CanvasWidth);
+
+        window.ApplyDocument(new ProjectDocument { NoiseIsLayer = true });
+        Settle();
+        Assert.Null(window.NoiseTab.CustomSize);
+        window.ApplyDocument(document);
+        Settle();
+        Assert.Equal((300, 200), window.NoiseTab.CustomSize);
+
+        window.NoiseTab.Resolution = 1024;
+        Assert.Null(window.NoiseTab.CustomSize);
+        Assert.Equal(1024, window.BuildDocument().Noise.Resolution);
         CloseWindow(window);
     });
 
@@ -490,106 +497,28 @@ public sealed class UiTests(UiSession ui) : IClassFixture<UiSession>
             var window = Open();
             WaitFor(window.OpenFileAsync(projectPath));
             Assert.Equal(1234u, window.BuildDocument().Noise.Seed);
-            Assert.False(window.NoiseTab.UseImage);
+            Assert.Single(window.BuildDocument().Layers!);
 
+            // 画像はレイヤーになる。始めたばかりなので、キャンバスは画像の大きさになる
             WaitFor(window.OpenFileAsync(imagePath));
             var document = window.BuildDocument();
-            Assert.True(window.NoiseTab.UseImage);
-            Assert.Equal("b.tga", document.Source.ImageName);
+            Assert.Equal(2, document.Layers!.Count);
+            Assert.Equal("b.tga", document.Layers[^1].Name);
+            Assert.Null(document.Layers[^1].Noise);
+            Assert.Equal(1, document.CanvasWidth);
             Assert.Equal(1234u, document.Noise.Seed);
             Assert.StartsWith("a.USKFX", window.Title);
 
             // 未保存の変更があっても、画像なら保存の確認を出さずに読み込む
             Assert.Contains("*", window.Title);
             WaitFor(window.OpenFileAsync(imagePath));
+            Assert.Equal(3, window.BuildDocument().Layers!.Count);
             CloseWindow(window);
         }
         finally
         {
             Directory.Delete(dir, recursive: true);
         }
-    });
-
-    [Fact]
-    public Task PaintMode_EnablesTools_AndShowsBrushSettings() => ui.Run(() =>
-    {
-        var window = Open();
-        Assert.False(window.Rail.BrushToolButton.IsEnabled);
-        Assert.False(window.Strip.BrushButton.IsVisible);
-
-        window.Strip.Mode = UskEffect.Graphics.PreviewMode.Effect;
-        window.Top.ModeSegment.SelectedIndex = 1;
-        Settle();
-
-        Assert.True(window.Rail.BrushToolButton.IsEnabled);
-        Assert.True(window.Strip.BrushButton.IsVisible);
-        Assert.Equal(UskEffect.Graphics.PreviewMode.Rect, window.Strip.Mode);
-
-        // 極座標とシームの表示のまま描ける
-        window.Strip.Mode = UskEffect.Graphics.PreviewMode.Polar;
-        Settle();
-        Assert.Equal(UskEffect.Graphics.PreviewMode.Polar, window.Strip.Mode);
-
-        window.Rail.EraserToolButton.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-        Settle();
-        Assert.Equal(UskEffect.Graphics.Painting.PaintTool.Eraser, window.CurrentBrush.Tool);
-        Assert.False(window.Strip.BrushColorRow.IsVisible);
-
-        window.Strip.BrushSize = 100000;
-        Assert.Equal(UskEffect.Graphics.Painting.BrushSettings.MaxSize, window.CurrentBrush.Size);
-
-        window.Top.ModeSegment.SelectedIndex = 0;
-        Settle();
-        Assert.False(window.Rail.BrushToolButton.IsEnabled);
-        CloseWindow(window);
-    });
-
-    [Fact]
-    public Task CanvasPress_ExplainsHowToPaint_OnlyWhenItCannotPaint() => ui.Run(() =>
-    {
-        var window = Open();
-        window.ExplainWhyNotPainting();
-        Assert.Contains("ペイント", window.Status.MessageText.Text);
-
-        window.Status.MessageText.Text = "";
-        window.Top.ModeSegment.SelectedIndex = 1;
-        Settle();
-        window.ExplainWhyNotPainting();
-        Assert.Equal("", window.Status.MessageText.Text);
-
-        window.Strip.Mode = UskEffect.Graphics.PreviewMode.Effect;
-        Settle();
-        window.Status.MessageText.Text = "";
-        window.ExplainWhyNotPainting();
-        Assert.Contains("エフェクト", window.Status.MessageText.Text);
-        CloseWindow(window);
-    });
-
-    [Fact]
-    public Task SeamFix_Buttons_SwitchToOffsetView_AndBlendLocksFileOperations() => ui.Run(() =>
-    {
-        var window = Open();
-        window.TabSegment.SelectedIndex = 1;
-        Settle();
-
-        window.SeamTab.ManualFixButton.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-        Settle();
-        Assert.Equal(1, window.Top.ModeSegment.SelectedIndex);
-        Assert.Equal(UskEffect.Graphics.PreviewMode.SeamCheck, window.Strip.Mode);
-
-        window.SeamTab.BlendButton.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-        Settle();
-        Assert.True(window.SeamTab.BlendControls.IsVisible);
-        Assert.False(window.SeamTab.FixButtons.IsVisible);
-        Assert.False(window.Top.IsEnabled);
-        Assert.False(window.NoiseTab.IsEnabled);
-
-        window.SeamTab.BlendCancelButton.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-        Settle();
-        Assert.False(window.SeamTab.BlendControls.IsVisible);
-        Assert.True(window.Top.IsEnabled);
-        Assert.True(window.NoiseTab.IsEnabled);
-        CloseWindow(window);
     });
 
     [Fact]
@@ -601,6 +530,7 @@ public sealed class UiTests(UiSession ui) : IClassFixture<UiSession>
         Assert.False(window.Top.UndoButton.IsEnabled);
 
         window.LayerTab.AddButton.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        window.LayerTab.AddPaintButton.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
         Settle();
         Assert.Equal(2, window.LayerTab.LayerList.Children.Count);
         Assert.True(window.LayerTab.DeleteButton.IsEnabled);
@@ -635,6 +565,7 @@ public sealed class UiTests(UiSession ui) : IClassFixture<UiSession>
         var window = Open();
         window.ApplyDocument(new ProjectDocument
         {
+            NoiseIsLayer = true,
             Layers =
             [
                 new UskEffect.Graphics.Painting.LayerData { Name = "下" },
@@ -647,7 +578,7 @@ public sealed class UiTests(UiSession ui) : IClassFixture<UiSession>
         window.ApplyDocument(new ProjectDocument());
         Settle();
         Assert.Single(window.LayerTab.LayerList.Children);
-        Assert.Null(window.BuildDocument().Layers);
+        Assert.NotNull(window.BuildDocument().Layers!.Single().Noise);
         CloseWindow(window);
     });
 
@@ -840,13 +771,935 @@ public sealed class UiTests(UiSession ui) : IClassFixture<UiSession>
     });
 
     [Fact]
-    public Task StripeControls_AreEnabledOnlyForStripe() => ui.Run(() =>
+    public Task EveryType_CanBeSelected_AndShapesHideNoiseOnlyRows() => ui.Run(() =>
     {
         var window = Open();
-        Assert.False(window.NoiseTab.StripeControls.IsEnabled);
-        window.NoiseTab.TypeBox.SelectedIndex = (int)NoiseType.Stripe;
-        Assert.True(window.NoiseTab.StripeControls.IsEnabled);
+        var tab = window.NoiseTab;
+        foreach (var type in Enum.GetValues<NoiseType>())
+        {
+            tab.SelectedType = type;
+            Settle();
+            Assert.Equal(type, tab.Read().Type);
+            Assert.Equal(type.IsNoise() && type != NoiseType.Stripe, tab.SeamRow.IsVisible);
+            Assert.Equal(type.IsNoise(), tab.ShapeSection.IsVisible);
+            Assert.Equal(type == NoiseType.Worley, tab.WorleyRow.IsVisible);
+            Assert.Equal(type == NoiseType.Stripe, tab.StripeControls.IsVisible);
+            Assert.Equal(!type.IsNoise(), tab.PatternSection.IsVisible);
+        }
+
+        tab.SelectedType = NoiseType.ShapeStar;
+        Settle();
+        Assert.True(tab.CountField.IsVisible);
+        Assert.False(tab.AspectField.IsVisible);
+        Assert.False(tab.SeedRow.IsVisible);
+        Assert.Equal("内側の比率", tab.AmountField.Label);
+
+        tab.SelectedType = NoiseType.Burst;
+        Settle();
+        Assert.True(tab.SeedRow.IsVisible);
         CloseWindow(window);
+    });
+
+    [Fact]
+    public Task ShapeSettings_SurviveWriteAndRead() => ui.Run(() =>
+    {
+        var window = Open();
+        var settings = new NoiseSettings
+        {
+            Type = NoiseType.BezierCurve,
+            Shape = new ShapeSettings
+            {
+                CenterX = 0.2f, CenterY = 0.7f, AngleDegrees = 45, Size = 0.3f, Thickness = 0.2f, Softness = 0.05f, Count = 9,
+                Falloff = 2, Amount = 0.25f, Aspect = 1.5f, Twist = -3, Stop0 = 0.1f, Stop1 = 0.2f, Stop2 = 0.3f, Stop3 = 0.4f,
+                P0X = 0.11f, P0Y = 0.12f, P1X = 0.13f, P1Y = 0.14f, P2X = 0.15f, P2Y = 0.16f,
+            },
+        };
+        window.NoiseTab.Write(settings);
+        var read = window.NoiseTab.Read();
+        Assert.Equal(settings.Type, read.Type);
+        Assert.Equal(settings.Shape, read.Shape);
+        CloseWindow(window);
+    });
+
+    [Fact]
+    public Task TypeMenu_OpensColumnsByGroup_WithASampleLeftOfEachName() => ui.Run(() =>
+    {
+        var window = Open(1280, 900);
+        var tab = window.NoiseTab;
+        using var engine = new RenderEngine(Path.Combine(NoiseFixture.FindRepositoryRoot(), "Shaders"));
+        var settings = tab.SampleSettings();
+        Assert.Equal(Enum.GetValues<NoiseType>().Length, settings.Count);
+        tab.SetSamples(engine.RenderSamples(settings));
+
+        ClickAt(window, CenterOf(tab.TypeButton, window));
+        Assert.True(tab.IsTypeMenuOpen);
+
+        // グループごとの列が横に並び、列の中は縦に並ぶ
+        Assert.Equal(5, tab.TypeMenu.Children.Count);
+        var left = tab.TypeMenu.Children.Select(c => c.TranslatePoint(default, window)!.Value.X).ToArray();
+        Assert.Equal(left.OrderBy(x => x), left);
+        Assert.Equal(left.Length, left.Distinct().Count());
+
+        var circle = tab.TypeItem(NoiseType.ShapeCircle);
+        var ring = tab.TypeItem(NoiseType.ShapeRing);
+        var circleAt = circle.TranslatePoint(default, window)!.Value;
+        var ringAt = ring.TranslatePoint(default, window)!.Value;
+        Assert.Equal(circleAt.X, ringAt.X);
+        Assert.True(ringAt.Y > circleAt.Y);
+
+        // サンプルは名前の左で、正方形。名前の開始位置はそろう
+        var sample = circle.GetVisualDescendants().OfType<Image>().Single();
+        var name = circle.GetVisualDescendants().OfType<TextBlock>().Single();
+        Assert.NotNull(sample.Source);
+        Assert.Equal(sample.Bounds.Width, sample.Bounds.Height);
+        Assert.True(circle.Bounds.Height >= sample.Bounds.Height);
+        var nameLeft = name.TranslatePoint(default, window)!.Value.X;
+        Assert.True(sample.TranslatePoint(new Point(sample.Bounds.Width, 0), window)!.Value.X <= nameLeft);
+        Assert.Equal(nameLeft, ring.GetVisualDescendants().OfType<TextBlock>().Single().TranslatePoint(default, window)!.Value.X);
+
+        // 選ぶと閉じて、欄の表示が変わる
+        ring.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Settle();
+        Assert.False(tab.IsTypeMenuOpen);
+        Assert.Equal(NoiseType.ShapeRing, tab.SelectedType);
+        Assert.Equal("Ring", tab.TypeNameText.Text);
+        Assert.NotNull(tab.TypeSample.Source);
+
+        // Esc でも閉じる
+        ClickAt(window, CenterOf(tab.TypeButton, window));
+        Assert.True(tab.IsTypeMenuOpen);
+        window.KeyPressQwerty(PhysicalKey.Escape, RawInputModifiers.None);
+        window.KeyReleaseQwerty(PhysicalKey.Escape, RawInputModifiers.None);
+        Settle();
+        Assert.False(tab.IsTypeMenuOpen);
+        CloseWindow(window);
+    });
+
+    [Fact]
+    public Task Stripe_ShowsOnlyWhatStripesUse() => ui.Run(() =>
+    {
+        var window = Open();
+        var tab = window.NoiseTab;
+        tab.SelectedType = NoiseType.Stripe;
+        Settle();
+        Assert.True(tab.FrequencyField.IsVisible);
+        Assert.False(tab.FractalRow.IsVisible);
+        Assert.False(tab.OctavesField.IsVisible);
+        Assert.False(tab.SeedRow.IsVisible);
+        CloseWindow(window);
+    });
+
+    [Fact]
+    public Task Persistence_AndLacunarity_ShowOnlyWhenLayered() => ui.Run(() =>
+    {
+        var window = Open();
+        var tab = window.NoiseTab;
+        tab.OctavesField.Value = 3;
+        Settle();
+        Assert.True(tab.PersistenceField.IsVisible);
+        tab.OctavesField.Value = 1;
+        Settle();
+        Assert.False(tab.PersistenceField.IsVisible);
+        Assert.False(tab.LacunarityField.IsVisible);
+        CloseWindow(window);
+    });
+
+    [Fact]
+    public Task EffectFeature_IsGone() => ui.Run(() =>
+    {
+        var window = Open();
+        Assert.Equal(3, window.Strip.ViewSegment.ItemCount);
+        CloseWindow(window);
+    });
+
+    private static void ClickAt(Window window, Point point)
+    {
+        window.MouseDown(point, MouseButton.Left);
+        window.MouseUp(point, MouseButton.Left);
+        Settle();
+    }
+
+    [Fact]
+    public Task LayerIcon_OpensBesideIt_AndClosesOnEscapeOrOutsideClick() => ui.Run(() =>
+    {
+        var window = Open();
+        var rail = window.Rail;
+        var icon = CenterOf(rail.LayerButton, window);
+        Assert.False(rail.IsLayerOpen);
+        Assert.Equal("1", rail.LayerNumberText.Text);
+
+        // ペイントモードでなくても開ける
+        ClickAt(window, icon);
+        Assert.True(rail.IsLayerOpen);
+        Assert.True(rail.LayerButton.Classes.Contains("selected"));
+
+        // アイコンの隣で、短く開く
+        var popup = window.LayerTab;
+        var left = popup.TranslatePoint(default, window)!.Value;
+        var iconRight = rail.LayerButton.TranslatePoint(new Point(rail.LayerButton.Bounds.Width, 0), window)!.Value.X;
+        Assert.True(left.X >= iconRight, $"レイヤーの左端 {left.X}、アイコンの右端 {iconRight}");
+        Assert.True(left.X - iconRight < 40, $"アイコンから離れている {left.X - iconRight}");
+        Assert.True(popup.Bounds.Width <= 300);
+        Assert.True(popup.Bounds.Height < window.Bounds.Height / 2, $"高さ {popup.Bounds.Height}");
+
+        window.KeyPressQwerty(PhysicalKey.Escape, RawInputModifiers.None);
+        window.KeyReleaseQwerty(PhysicalKey.Escape, RawInputModifiers.None);
+        Settle();
+        Assert.False(rail.IsLayerOpen);
+        Assert.False(rail.LayerButton.Classes.Contains("selected"));
+
+        // 別のところをクリックすると閉じる
+        ClickAt(window, icon);
+        Assert.True(rail.IsLayerOpen);
+        ClickAt(window, CenterOf(window.Status, window));
+        Assert.False(rail.IsLayerOpen);
+
+        // もう一度アイコンを押しても閉じる
+        ClickAt(window, icon);
+        Assert.True(rail.IsLayerOpen);
+        ClickAt(window, icon);
+        Assert.False(rail.IsLayerOpen);
+        CloseWindow(window);
+    });
+
+    [Fact]
+    public Task CanvasClick_ClosesLayers_WithoutShowingAPaintHint() => ui.Run(() =>
+    {
+        var window = Open();
+        var input = (UskEffect.App.Interop.IHostWindowInput)window.Viewport;
+        ClickAt(window, CenterOf(window.Rail.LayerButton, window));
+        Assert.True(window.Rail.IsLayerOpen);
+        window.Status.MessageText.Text = "";
+
+        input.OnPointerDown(0, 10, 10);
+        input.OnPointerUp(0, 10, 10);
+        Settle();
+
+        Assert.False(window.Rail.IsLayerOpen);
+        Assert.Equal("", window.Status.MessageText.Text);
+
+        // 閉じた後のクリックは普段どおり
+        input.OnPointerDown(0, 10, 10);
+        input.OnPointerUp(0, 10, 10);
+        Assert.Contains("ペイント", window.Status.MessageText.Text);
+        CloseWindow(window);
+    });
+
+    private static readonly Avalonia.Interactivity.RoutedEventArgs ClickArgs = new(Button.ClickEvent);
+
+    [Fact]
+    public Task NewStart_OpensTheTypeMenu_AndChoosingMakesTheFirstLayer() => ui.Run(() =>
+    {
+        var window = OpenWithoutChoosing();
+        Assert.True(window.NoiseTab.IsTypeMenuOpen);
+
+        window.NoiseTab.TypeItem(NoiseType.Solid).RaiseEvent(ClickArgs);
+        Settle();
+        Assert.False(window.NoiseTab.IsTypeMenuOpen);
+        var layer = window.BuildDocument().Layers!.Single();
+        Assert.Equal(NoiseType.Solid, layer.Noise!.Type);
+        Assert.True(window.NoiseTab.SolidColorRow.IsVisible);
+        Assert.DoesNotContain("*", window.Title);
+        Assert.False(window.Top.UndoButton.IsEnabled);
+        CloseWindow(window);
+    });
+
+    [Fact]
+    public Task NewStart_Cancelled_LeavesAnEmptyPaintLayer() => ui.Run(() =>
+    {
+        var window = OpenWithoutChoosing();
+        window.KeyPressQwerty(PhysicalKey.Escape, RawInputModifiers.None);
+        window.KeyReleaseQwerty(PhysicalKey.Escape, RawInputModifiers.None);
+        Settle();
+        Assert.False(window.NoiseTab.IsTypeMenuOpen);
+        Assert.True(window.NoiseTab.GenerateButton.IsVisible);
+        Assert.True(window.Rail.BrushToolButton.IsEnabled);
+
+        // 後から選ぶと、空のレイヤーを置き換える
+        window.AddNoiseLayer(NoiseType.Worley);
+        Settle();
+        Assert.Equal(NoiseType.Worley, window.BuildDocument().Layers!.Single().Noise!.Type);
+        CloseWindow(window);
+    });
+
+    [Fact]
+    public Task SolidColor_IsSavedInTheLayer() => ui.Run(() =>
+    {
+        var window = Open();
+        window.NoiseTab.SelectedType = NoiseType.Solid;
+        window.NoiseTab.SolidColorSwatch.Color = Avalonia.Media.Colors.Red;
+        Settle();
+        var shape = window.BuildDocument().Layers!.Single().Noise!.Shape;
+        Assert.Equal((1f, 0f, 0f), (shape.SolidR, shape.SolidG, shape.SolidB));
+        Assert.False(window.NoiseTab.SizeField.IsVisible);
+        Assert.False(window.NoiseTab.ToneSection.IsVisible);
+        window.NoiseTab.SelectedType = NoiseType.Perlin;
+        Settle();
+        Assert.True(window.NoiseTab.ToneSection.IsVisible);
+        CloseWindow(window);
+    });
+
+    [Fact]
+    public Task ToolsAndBrush_FollowTheLayerKind_WithoutAModeSwitch() => ui.Run(() =>
+    {
+        var window = Open();
+        Assert.False(window.Rail.BrushToolButton.IsEnabled);
+        Assert.False(window.Strip.BrushButton.IsVisible);
+        window.ExplainWhyNotPainting();
+        Assert.Contains("ノイズのレイヤー", window.Status.MessageText.Text);
+
+        window.LayerTab.AddButton.RaiseEvent(ClickArgs);
+        window.LayerTab.AddPaintButton.RaiseEvent(ClickArgs);
+        Settle();
+        Assert.True(window.Rail.BrushToolButton.IsEnabled);
+        Assert.True(window.Strip.BrushButton.IsVisible);
+        window.Status.MessageText.Text = "";
+        window.ExplainWhyNotPainting();
+        Assert.Equal("", window.Status.MessageText.Text);
+
+        window.Rail.EraserToolButton.RaiseEvent(ClickArgs);
+        Settle();
+        Assert.Equal(UskEffect.Graphics.Painting.PaintTool.Eraser, window.CurrentBrush.Tool);
+        Assert.False(window.Strip.BrushColorRow.IsVisible);
+        window.Strip.BrushSize = 100000;
+        Assert.Equal(UskEffect.Graphics.Painting.BrushSettings.MaxSize, window.CurrentBrush.Size);
+
+        // ノイズのレイヤーへ戻ると、道具は使えない
+        var noiseRow = (Border)window.LayerTab.LayerList.Children[1];
+        noiseRow.RaiseEvent(new Avalonia.Input.PointerPressedEventArgs(
+            noiseRow, new Avalonia.Input.Pointer(1, Avalonia.Input.PointerType.Mouse, true), noiseRow,
+            default, 0, new Avalonia.Input.PointerPointProperties(RawInputModifiers.LeftMouseButton, Avalonia.Input.PointerUpdateKind.LeftButtonPressed), KeyModifiers.None));
+        Settle();
+        Assert.False(window.Rail.BrushToolButton.IsEnabled);
+        CloseWindow(window);
+    });
+
+    [Fact]
+    public Task Tiling_BelongsToEachLayer() => ui.Run(() =>
+    {
+        var window = Open();
+        var tab = window.NoiseTab;
+        tab.TilingRow.X.Value = 3;
+        Settle();
+        var first = window.BuildDocument().Layers![0];
+        Assert.Equal(3f, first.TilingX);
+
+        // 別のレイヤーは別の値を持つ
+        window.LayerTab.AddButton.RaiseEvent(ClickArgs);
+        window.LayerTab.AddPaintButton.RaiseEvent(ClickArgs);
+        Settle();
+        Assert.Equal((1f, 1f, 0f, 0f), tab.ReadTexture());
+        tab.TilingRow.X.Value = 5;
+        Settle();
+        var layers = window.BuildDocument().Layers!;
+        Assert.Equal(3f, layers[0].TilingX);
+        Assert.Equal(5f, layers[1].TilingX);
+
+        // 表示の設定には入らない
+        Assert.Equal(1f, window.BuildDocument().Preview.TilingX);
+        CloseWindow(window);
+    });
+
+    [Fact]
+    public Task ViewStrip_HasTileView_AndOutputToggle_ThatFollowsTheExport() => ui.Run(() =>
+    {
+        var window = Open();
+        var strip = window.Strip;
+        strip.ViewSegment.SelectedIndex = 2;
+        Settle();
+        Assert.Equal(PreviewMode.Tile4x4, strip.Mode);
+
+        // カラーは廃止。アルファと白黒の 2 つで、白黒が既定
+        Assert.Equal(2, strip.OutputSegment.ItemCount);
+        Assert.Equal(CompositeOutput.Mask, strip.Output);
+
+        strip.Output = CompositeOutput.BlackToAlpha;
+        Settle();
+        Assert.Equal(CompositeOutput.BlackToAlpha, window.BuildDocument().Export.Output);
+
+        // 保存から戻る
+        var saved = window.BuildDocument();
+        strip.Output = CompositeOutput.Mask;
+        window.ApplyDocument(saved);
+        Settle();
+        Assert.Equal(CompositeOutput.BlackToAlpha, strip.Output);
+        CloseWindow(window);
+    });
+
+    [Theory]
+    [InlineData(ExportChannels.Gray8, false, CompositeOutput.Mask)]
+    [InlineData(ExportChannels.Gray16, false, CompositeOutput.Mask)]
+    [InlineData(ExportChannels.RgbaOpaque, false, CompositeOutput.BlackToAlpha)]
+    [InlineData(ExportChannels.RgbaSource, false, CompositeOutput.BlackToAlpha)]
+    [InlineData(ExportChannels.RgbaWhiteAlpha, false, CompositeOutput.BlackToAlpha)]
+    [InlineData(ExportChannels.Gray8, true, CompositeOutput.BlackToAlpha)]
+    public Task OldProject_ExportSettings_BecomeTheOutputToggle(ExportChannels channels, bool transparent, CompositeOutput expected) => ui.Run(() =>
+    {
+        var window = Open();
+        window.ApplyDocument(new ProjectDocument { Export = new ExportSettings { Channels = channels, Transparent = transparent } });
+        Settle();
+        Assert.Equal(expected, window.Strip.Output);
+        Assert.Equal(channels == ExportChannels.Gray16 && !transparent, window.BuildDocument().Export.Bit16);
+        CloseWindow(window);
+    });
+
+    [Fact]
+    public Task OldProject_WithAnImage_OpensItAsALayer_AtItsOwnSize() => ui.Run(() =>
+    {
+        var window = Open();
+        window.ApplyDocument(new ProjectDocument
+        {
+            Image = new ImageData(2, 1, [1, 2, 3, 255, 4, 5, 6, 255]),
+            Source = new SourceSettings { Kind = SourceKind.Image, ImageName = "a.png" },
+        });
+        Settle();
+
+        var document = window.BuildDocument();
+        var layer = document.Layers!.Single();
+        Assert.Equal("a.png", layer.Name);
+        Assert.Null(layer.Noise);
+        Assert.True(layer.Visible);
+        Assert.Equal(1, layer.Image!.Rgba[0]);
+        Assert.Equal(2, document.CanvasWidth);
+        Assert.Equal(1, document.CanvasHeight);
+        Assert.Null(document.Image);
+        CloseWindow(window);
+    });
+
+    [Fact]
+    public Task Motion_Sections_AreMarkedToAppearSmoothly_AndLayerRowsStayInPlace() => ui.Run(() =>
+    {
+        var window = Open();
+        Assert.True(window.NoiseTab.NoiseControls.Classes.Contains("reveal"));
+        Assert.True(window.NoiseTab.PatternSection.Classes.Contains("reveal"));
+        Assert.True(window.LayerTab.AddChoiceRow.Classes.Contains("reveal"));
+
+        // 選択を変えても行を作り直さないので、色の遷移が途切れない
+        var row = window.LayerTab.LayerList.Children[0];
+        window.LayerTab.OpacityField.Value = 0.5;
+        Settle();
+        Assert.Same(row, window.LayerTab.LayerList.Children[0]);
+
+        window.LayerTab.AddButton.RaiseEvent(ClickArgs);
+        window.LayerTab.AddPaintButton.RaiseEvent(ClickArgs);
+        Settle();
+        Assert.Same(row, window.LayerTab.LayerList.Children[1]);
+        CloseWindow(window);
+    });
+
+    private static bool ExportResult(Task<bool> task)
+    {
+        WaitFor(task);
+        return task.Result;
+    }
+
+    private static ExportChoice Choice(string folder, string name, CompositeOutput output = CompositeOutput.Mask, bool overwrite = false, bool bit16 = false,
+        ExportTint tint = ExportTint.None, ImageFileFormat format = ImageFileFormat.Png) =>
+        new(new ExportSettings { Folder = folder, Name = name, Output = output, AllowOverwrite = overwrite, Bit16 = bit16, Tint = tint, TintR = 1, TintG = 0, TintB = 0, Format = format }, 64, null);
+
+    [Fact]
+    public Task Export_WritesTheFile_AndShowsABannerWithThePath() => ui.Run(() =>
+    {
+        string dir = Path.Combine(Path.GetTempPath(), $"usk-export-{Guid.NewGuid():N}");
+        try
+        {
+            var window = Open();
+            Assert.True(ExportResult(window.RunExportAsync(Choice(dir, "a"), _ => throw new InvalidOperationException("確認は出ないはず"))));
+            string path = Path.Combine(dir, "a.png");
+            Assert.True(File.Exists(path));
+            Assert.Equal(64, UskEffect.Core.Imaging.ImageLoader.Load(path).Width);
+            Assert.True(window.ExportBanner.IsVisible);
+            Assert.Contains("出力しました", window.ExportBannerText.Text);
+            Assert.Contains(path, window.ExportBannerText.Text);
+            CloseWindow(window);
+        }
+        finally
+        {
+            if (Directory.Exists(dir))
+                Directory.Delete(dir, recursive: true);
+        }
+    });
+
+    [Fact]
+    public Task Export_AsksBeforeOverwriting_UnlessAllowed() => ui.Run(() =>
+    {
+        string dir = Path.Combine(Path.GetTempPath(), $"usk-export-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        try
+        {
+            string path = Path.Combine(dir, "a.png");
+            File.WriteAllBytes(path, [1, 2, 3]);
+            var window = Open();
+            int asked = 0;
+
+            // 断れば書かない
+            Assert.False(ExportResult(window.RunExportAsync(Choice(dir, "a"), _ => { asked++; return Task.FromResult(false); })));
+            Assert.Equal(1, asked);
+            Assert.Equal(3, new FileInfo(path).Length);
+
+            // 認めれば書く
+            Assert.True(ExportResult(window.RunExportAsync(Choice(dir, "a"), _ => { asked++; return Task.FromResult(true); })));
+            Assert.Equal(2, asked);
+            Assert.True(new FileInfo(path).Length > 3);
+
+            // 上書きを許可していれば聞かない
+            File.WriteAllBytes(path, [1, 2, 3]);
+            Assert.True(ExportResult(window.RunExportAsync(Choice(dir, "a", overwrite: true), _ => { asked++; return Task.FromResult(false); })));
+            Assert.Equal(2, asked);
+            Assert.True(new FileInfo(path).Length > 3);
+            CloseWindow(window);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    });
+
+    [Fact]
+    public Task Export_FollowsTheChosenFormat() => ui.Run(() =>
+    {
+        string dir = Path.Combine(Path.GetTempPath(), $"usk-export-{Guid.NewGuid():N}");
+        try
+        {
+            var window = Open();
+            window.NoiseTab.SelectedType = NoiseType.ShapeCircle;
+            Settle();
+
+            // 拡張子まで書かれても二重にしない。アルファは RGBA で、黒は透明
+            Assert.True(ExportResult(window.RunExportAsync(Choice(dir, "alpha.png", CompositeOutput.BlackToAlpha), _ => Task.FromResult(true))));
+            var alpha = UskEffect.Core.Imaging.ImageLoader.Load(Path.Combine(dir, "alpha.png"));
+            Assert.Equal(0, alpha.Rgba[3]);
+            Assert.Equal(255, alpha.Rgba[(32 * 64 + 32) * 4 + 3]);
+
+            // 色を乗せる
+            Assert.True(ExportResult(window.RunExportAsync(Choice(dir, "red", CompositeOutput.BlackToAlpha, tint: ExportTint.Multiply), _ => Task.FromResult(true))));
+            var red = UskEffect.Core.Imaging.ImageLoader.Load(Path.Combine(dir, "red.png"));
+            int center = (32 * 64 + 32) * 4;
+            Assert.Equal(255, red.Rgba[center]);
+            Assert.Equal(0, red.Rgba[center + 1]);
+
+            // 白黒は透明にしない。16bit と TGA も出せる
+            Assert.True(ExportResult(window.RunExportAsync(Choice(dir, "mask"), _ => Task.FromResult(true))));
+            Assert.Equal(255, UskEffect.Core.Imaging.ImageLoader.Load(Path.Combine(dir, "mask.png")).Rgba[3]);
+            Assert.True(ExportResult(window.RunExportAsync(Choice(dir, "m16", bit16: true), _ => Task.FromResult(true))));
+            Assert.True(File.Exists(Path.Combine(dir, "m16.png")));
+            Assert.True(ExportResult(window.RunExportAsync(Choice(dir, "t", format: ImageFileFormat.Tga), _ => Task.FromResult(true))));
+            Assert.True(File.Exists(Path.Combine(dir, "t.tga")));
+            CloseWindow(window);
+        }
+        finally
+        {
+            if (Directory.Exists(dir))
+                Directory.Delete(dir, recursive: true);
+        }
+    });
+
+    [Fact]
+    public Task ExportWindow_PutsConfirmWhereTheExportButtonIs_AndShowsOnlyWhatApplies() => ui.Run(() =>
+    {
+        var initial = new ExportChoice(new ExportSettings { Output = CompositeOutput.Mask, Name = "a", Folder = "C:/x" }, 512, null);
+        var rendered = new List<ExportChoice>();
+        var window = new ExportWindow(initial, c => { rendered.Add(c); return new ImageData(1, 1, [255, 255, 255, 255]); }, _ => Task.FromResult(true));
+        window.Show();
+        Settle();
+
+        // 計算した位置と、実際のボタンの中心が一致する
+        var button = window.ConfirmButton;
+        // 現れる動きの途中でも狂わないよう、配置の値だけで求める
+        var center = new Point(button.Bounds.Width / 2, button.Bounds.Height / 2);
+        for (Control? c = button; c is not null and not Window; c = c.Parent as Control)
+            center += c.Bounds.Position;
+        var origin = ExportWindow.PositionFor(new PixelPoint(1000, 500), 1);
+        Assert.Equal(1000, origin.X + (int)Math.Round(center.X));
+        Assert.Equal(500, origin.Y + (int)Math.Round(center.Y));
+
+        Assert.NotEmpty(rendered);
+        Assert.True(window.Bit16Row.IsVisible);
+        Assert.False(window.TintRow.IsVisible);
+
+        window.OutputSegment.SelectedIndex = 0;
+        Settle();
+        Assert.False(window.Bit16Row.IsVisible);
+        Assert.True(window.TintRow.IsVisible);
+        Assert.False(window.TintSwatch.IsVisible);
+        window.TintSegment.SelectedIndex = 1;
+        Settle();
+        Assert.True(window.TintSwatch.IsVisible);
+        Assert.Equal(ExportTint.Multiply, window.Read().Settings.Tint);
+
+        window.ResolutionBox.SelectedIndex = 2;
+        Settle();
+        Assert.Equal(1024, rendered[^1].Resolution);
+
+        // 16bit は PNG だけ。名前がなければ出力できない
+        window.OutputSegment.SelectedIndex = 1;
+        window.FormatSegment.SelectedIndex = 1;
+        Assert.Equal(ImageFileFormat.Tga, window.Read().Settings.Format);
+        window.Bit16Switch.IsChecked = true;
+        Settle();
+        Assert.Equal(ImageFileFormat.Png, window.Read().Settings.Format);
+        Assert.False(window.TgaItem.IsEnabled);
+        window.NameBox.Text = " ";
+        Settle();
+        Assert.False(window.ConfirmButton.IsEnabled);
+        window.Close();
+    });
+
+    [Fact]
+    public Task ExportWindow_ConfirmClosesOnlyWhenTheExportSucceeds() => ui.Run(() =>
+    {
+        bool succeed = false;
+        var initial = new ExportChoice(new ExportSettings { Name = "a", Folder = "C:/x", Output = CompositeOutput.Mask }, 512, null);
+        var window = new ExportWindow(initial, _ => null, _ => Task.FromResult(succeed));
+        window.Show();
+        Settle();
+        window.ConfirmButton.RaiseEvent(ClickArgs);
+        Settle();
+        Assert.False(window.Confirmed);
+        Assert.True(window.IsVisible);
+
+        succeed = true;
+        window.ConfirmButton.RaiseEvent(ClickArgs);
+        Settle();
+        Assert.True(window.Confirmed);
+        Assert.False(window.IsVisible);
+    });
+
+    [Fact]
+    public Task BrushSettings_CloseOnCanvasClick_AndNoClearButton() => ui.Run(() =>
+    {
+        var window = Open();
+        window.LayerTab.AddButton.RaiseEvent(ClickArgs);
+        window.LayerTab.AddPaintButton.RaiseEvent(ClickArgs);
+        Settle();
+        ClickAt(window, CenterOf(window.Strip.BrushButton, window));
+        Assert.True(window.Strip.IsPopupOpen);
+
+        var input = (UskEffect.App.Interop.IHostWindowInput)window.Viewport;
+        input.OnPointerDown(0, 10, 10);
+        input.OnPointerUp(0, 10, 10);
+        Settle();
+        Assert.False(window.Strip.IsPopupOpen);
+
+        // 背景を透過し、大きいプレビューだけ背景を持つ
+        Assert.False(window.Strip.BrushButtonPreview.ShowBackdrop);
+        Assert.True(window.Strip.BrushLargePreview.ShowBackdrop);
+        CloseWindow(window);
+    });
+
+    [Fact]
+    public Task BrushSettings_CloseOnEscape() => ui.Run(() =>
+    {
+        var window = Open();
+        window.LayerTab.AddButton.RaiseEvent(ClickArgs);
+        window.LayerTab.AddPaintButton.RaiseEvent(ClickArgs);
+        Settle();
+        ClickAt(window, CenterOf(window.Strip.BrushButton, window));
+        Assert.True(window.Strip.IsPopupOpen);
+        window.KeyPressQwerty(PhysicalKey.Escape, RawInputModifiers.None);
+        window.KeyReleaseQwerty(PhysicalKey.Escape, RawInputModifiers.None);
+        Settle();
+        Assert.False(window.Strip.IsPopupOpen);
+        CloseWindow(window);
+    });
+
+    // 閉じたポップアップの入力欄にフォーカスが残っていても、元に戻すは効く
+    [Fact]
+    public Task Undo_WorksWhilePopupIsOpen_AndAfterItCloses() => ui.Run(() =>
+    {
+        var window = Open();
+        window.LayerTab.AddButton.RaiseEvent(ClickArgs);
+        window.LayerTab.AddPaintButton.RaiseEvent(ClickArgs);
+        window.LayerTab.AddButton.RaiseEvent(ClickArgs);
+        window.LayerTab.AddPaintButton.RaiseEvent(ClickArgs);
+        Settle();
+        Assert.Equal(3, window.BuildDocument().Layers!.Count);
+
+        // 開いたまま
+        ClickAt(window, CenterOf(window.Strip.BrushButton, window));
+        Assert.True(window.Strip.IsPopupOpen);
+        window.KeyPressQwerty(PhysicalKey.Z, RawInputModifiers.Control);
+        window.KeyReleaseQwerty(PhysicalKey.Z, RawInputModifiers.Control);
+        Settle();
+        Assert.Equal(2, window.BuildDocument().Layers!.Count);
+
+        // 入力欄にフォーカスを残して閉じた後
+        window.Strip.BrushSizeField.BeginEdit();
+        Settle();
+        window.Strip.BrushSizeField.EndEdit(commit: false);
+        window.Strip.ClosePopups();
+        Settle();
+        window.KeyPressQwerty(PhysicalKey.Z, RawInputModifiers.Control);
+        window.KeyReleaseQwerty(PhysicalKey.Z, RawInputModifiers.Control);
+        Settle();
+        Assert.Single(window.BuildDocument().Layers!);
+        CloseWindow(window);
+    });
+
+    [Fact]
+    public Task SliderDragging_TurnsOffItsTransitions() => ui.Run(() =>
+    {
+        var window = Open();
+        var field = window.NoiseTab.PersistenceField;
+        var center = CenterOf(field, window);
+        Assert.False(field.Classes.Contains("dragging"));
+
+        window.MouseDown(center, MouseButton.Left);
+        window.MouseMove(center + new Point(20, 0));
+        Settle();
+        Assert.True(field.Classes.Contains("dragging"));
+
+        window.MouseUp(center + new Point(20, 0), MouseButton.Left);
+        Settle();
+        Assert.False(field.Classes.Contains("dragging"));
+        CloseWindow(window);
+    });
+
+    [Fact]
+    public Task LayerPopup_KeepsItsHeight_WhenChoosingAndAdding() => ui.Run(() =>
+    {
+        var window = Open();
+        ClickAt(window, CenterOf(window.Rail.LayerButton, window));
+        var popup = window.LayerTab;
+        double height = popup.Bounds.Height;
+        Assert.True(height > 0);
+
+        popup.AddButton.RaiseEvent(ClickArgs);
+        Settle();
+        Assert.True(popup.AddChoiceRow.IsVisible);
+        Assert.False(popup.MoveButtons.IsVisible);
+        Assert.Equal(height, popup.Bounds.Height);
+
+        popup.AddPaintButton.RaiseEvent(ClickArgs);
+        Settle();
+        Assert.True(popup.MoveButtons.IsVisible);
+        Assert.Equal(height, popup.Bounds.Height);
+        window.Rail.CloseLayers();
+        CloseWindow(window);
+    });
+
+    [Fact]
+    public Task FirstLayer_IsAnOrdinaryNoiseLayer_ThatCanBeEditedAndDeleted() => ui.Run(() =>
+    {
+        var window = Open();
+        var tab = window.NoiseTab;
+        var first = window.BuildDocument().Layers!.Single();
+        Assert.NotNull(first.Noise);
+        Assert.True(tab.NoiseControls.IsVisible);
+        Assert.False(tab.GenerateButton.IsVisible);
+
+        tab.FrequencyField.Value = 11;
+        Settle();
+        Assert.Equal(11, window.BuildDocument().Layers![0].Noise!.Frequency);
+
+        // ほかのレイヤーと同じように動かして消せる
+        window.LayerTab.AddButton.RaiseEvent(ClickArgs);
+        window.LayerTab.AddPaintButton.RaiseEvent(ClickArgs);
+        Settle();
+        Assert.True(window.LayerTab.MoveDownButton.IsEnabled);
+        window.LayerTab.MoveDownButton.RaiseEvent(ClickArgs);
+        Settle();
+        Assert.Null(window.BuildDocument().Layers![0].Noise);
+        Assert.NotNull(window.BuildDocument().Layers![1].Noise);
+        window.LayerTab.DeleteButton.RaiseEvent(ClickArgs);
+        Settle();
+        Assert.NotNull(window.BuildDocument().Layers!.Single().Noise);
+        CloseWindow(window);
+    });
+
+    [Fact]
+    public Task AddButton_OffersNoiseOrPaint_AndPaintLayerHasNoNoiseControls() => ui.Run(() =>
+    {
+        var window = Open();
+        var tab = window.NoiseTab;
+        Assert.False(window.LayerTab.AddChoiceRow.IsVisible);
+        window.LayerTab.AddButton.RaiseEvent(ClickArgs);
+        Settle();
+        Assert.True(window.LayerTab.AddChoiceRow.IsVisible);
+
+        window.LayerTab.AddPaintButton.RaiseEvent(ClickArgs);
+        Settle();
+        Assert.False(window.LayerTab.AddChoiceRow.IsVisible);
+        Assert.Equal("2", window.Rail.LayerNumberText.Text);
+        Assert.Null(window.BuildDocument().Layers![^1].Noise);
+        Assert.False(tab.NoiseControls.IsVisible);
+        Assert.True(tab.GenerateButton.IsVisible);
+        CloseWindow(window);
+    });
+
+    [Fact]
+    public Task TextureGenerate_PicksATypeThenCreates_AndEscapeCancels() => ui.Run(() =>
+    {
+        var window = Open(1280, 900);
+        var tab = window.NoiseTab;
+        window.LayerTab.AddButton.RaiseEvent(ClickArgs);
+        window.LayerTab.AddPaintButton.RaiseEvent(ClickArgs);
+        Settle();
+        int before = window.BuildDocument().Layers!.Count;
+
+        // Esc で取り消すと、レイヤーは増えない
+        ClickAt(window, CenterOf(tab.GenerateButton, window));
+        Assert.True(tab.IsTypeMenuOpen);
+        window.KeyPressQwerty(PhysicalKey.Escape, RawInputModifiers.None);
+        window.KeyReleaseQwerty(PhysicalKey.Escape, RawInputModifiers.None);
+        Settle();
+        Assert.False(tab.IsTypeMenuOpen);
+        Assert.Equal(before, window.BuildDocument().Layers!.Count);
+
+        // 別の場所のクリックでも取り消す
+        ClickAt(window, CenterOf(tab.GenerateButton, window));
+        Assert.True(tab.IsTypeMenuOpen);
+        ClickAt(window, CenterOf(window.Status, window));
+        Assert.False(tab.IsTypeMenuOpen);
+        Assert.Equal(before, window.BuildDocument().Layers!.Count);
+
+        // 種類を選ぶと生成する
+        ClickAt(window, CenterOf(tab.GenerateButton, window));
+        tab.TypeItem(NoiseType.ShapeRing).RaiseEvent(ClickArgs);
+        Settle();
+        var layers = window.BuildDocument().Layers!;
+        Assert.Equal(before + 1, layers.Count);
+        Assert.Equal(NoiseType.ShapeRing, layers[^1].Noise!.Type);
+        Assert.True(tab.NoiseControls.IsVisible);
+        Assert.Equal(NoiseType.ShapeRing, tab.SelectedType);
+
+        // 生成の後の種類の変更は、そのレイヤーを変えるだけ
+        tab.SelectedType = NoiseType.ShapeCircle;
+        Settle();
+        Assert.Equal(before + 1, window.BuildDocument().Layers!.Count);
+        Assert.Equal(NoiseType.ShapeCircle, window.BuildDocument().Layers![^1].Noise!.Type);
+        CloseWindow(window);
+    });
+
+    [Fact]
+    public Task AddNoiseFromLayerPopup_OpensTheTypeMenu() => ui.Run(() =>
+    {
+        var window = Open(1280, 900);
+        ClickAt(window, CenterOf(window.Rail.LayerButton, window));
+        window.LayerTab.AddButton.RaiseEvent(ClickArgs);
+        window.LayerTab.AddNoiseButton.RaiseEvent(ClickArgs);
+        Settle();
+        Assert.False(window.Rail.IsLayerOpen);
+        Assert.True(window.NoiseTab.IsTypeMenuOpen);
+        window.NoiseTab.CloseTypeMenu();
+        Settle();
+        Assert.Single(window.BuildDocument().Layers!);
+        CloseWindow(window);
+    });
+
+    [Fact]
+    public Task LayerToggles_SetInvertAndMask_AndBlendIsSaved() => ui.Run(() =>
+    {
+        var window = Open();
+        var row = (Grid)((Border)window.LayerTab.LayerList.Children[0]).Child!;
+        var toggles = row.Children.OfType<Button>().Where(b => Grid.GetColumn(b) >= 3).OrderBy(Grid.GetColumn).ToArray();
+        Assert.Equal(2, toggles.Length);
+
+        toggles[0].RaiseEvent(ClickArgs);
+        Settle();
+        Assert.True(window.BuildDocument().Layers![0].Invert);
+
+        row = (Grid)((Border)window.LayerTab.LayerList.Children[0]).Child!;
+        toggles = row.Children.OfType<Button>().Where(b => Grid.GetColumn(b) >= 3).OrderBy(Grid.GetColumn).ToArray();
+        Assert.True(toggles[0].Classes.Contains("on"));
+        toggles[1].RaiseEvent(ClickArgs);
+        Settle();
+        Assert.True(window.BuildDocument().Layers![0].IsMask);
+        Assert.False(window.LayerTab.BlendBox.IsEnabled);
+
+        window.Top.UndoButton.RaiseEvent(ClickArgs);
+        Settle();
+        Assert.False(window.BuildDocument().Layers![0].IsMask);
+        Assert.True(window.LayerTab.BlendBox.IsEnabled);
+
+        window.LayerTab.BlendBox.SelectedIndex = (int)UskEffect.Graphics.Painting.LayerBlendMode.Multiply;
+        Settle();
+        Assert.Equal(UskEffect.Graphics.Painting.LayerBlendMode.Multiply, window.BuildDocument().Layers![0].Blend);
+        CloseWindow(window);
+    });
+
+    [Fact]
+    public Task LayerRows_ShowThumbnails() => ui.Run(() =>
+    {
+        var window = Open();
+        int id = window.BuildDocument().Layers!.Count; // 最初のレイヤーの番号は 1
+        window.LayerTab.ShowThumbnails([new UskEffect.Graphics.Painting.LayerThumbnail(id, 2, new byte[16])]);
+        Settle();
+
+        var row = (Border)window.LayerTab.LayerList.Children[0];
+        Assert.NotNull(((Grid)row.Child!).Children.OfType<Image>().Single().Source);
+        CloseWindow(window);
+    });
+
+    [Fact]
+    public Task OldProject_GetsItsNoiseAsTheBottomLayer_WithInvertOnTheLayer() => ui.Run(() =>
+    {
+        var window = Open();
+        window.ApplyDocument(new ProjectDocument
+        {
+            Noise = new NoiseSettings { Type = NoiseType.Worley, Frequency = 7, Invert = true },
+            Layers = [new UskEffect.Graphics.Painting.LayerData { Name = "上" }],
+        });
+        Settle();
+
+        var layers = window.BuildDocument().Layers!;
+        Assert.Equal(2, layers.Count);
+        Assert.Equal(NoiseType.Worley, layers[0].Noise!.Type);
+        Assert.Equal(7, layers[0].Noise!.Frequency);
+        Assert.False(layers[0].Noise!.Invert);
+        Assert.True(layers[0].Invert);
+        Assert.Null(layers[1].Noise);
+
+        // 新しい形式で保存したものは、そのまま開く
+        window.ApplyDocument(window.BuildDocument());
+        Settle();
+        Assert.Equal(2, window.BuildDocument().Layers!.Count);
+        CloseWindow(window);
+    });
+
+    [Fact]
+    public Task BrushButton_ShowsAPreview_AndThePopupScalesItsSize() => ui.Run(() =>
+    {
+        var window = Open();
+        var strip = window.Strip;
+        strip.BrushHardnessField.Value = 0.3;
+        strip.BrushColorSwatch.Color = Avalonia.Media.Colors.Red;
+        Settle();
+        // 動きの途中の値ではなく、行き先を確かめる
+        Assert.Equal(0.3, strip.BrushButtonPreview.GetBaseValue(BrushPreview.HardnessProperty).GetValueOrDefault(), 3);
+        Assert.Equal(Avalonia.Media.Colors.Red, strip.BrushButtonPreview.GetBaseValue(BrushPreview.BrushColorProperty).GetValueOrDefault());
+        Assert.Equal(Avalonia.Media.Colors.Red, strip.BrushLargePreview.GetBaseValue(BrushPreview.BrushColorProperty).GetValueOrDefault());
+
+        // 大きさは枠に収まるよう正規化する。実寸ではない
+        strip.BrushSizeField.Value = strip.BrushSizeField.Minimum;
+        double smallest = strip.BrushLargePreview.GetBaseValue(BrushPreview.SizeRatioProperty).GetValueOrDefault();
+        strip.BrushSizeField.Value = strip.BrushSizeField.Maximum;
+        Assert.Equal(1, strip.BrushLargePreview.GetBaseValue(BrushPreview.SizeRatioProperty).GetValueOrDefault(), 6);
+        Assert.InRange(smallest, 0.01, 0.3);
+
+        // 1 回で反転する
+        strip.BrushColorSwatch.Color = Avalonia.Media.Colors.White;
+        strip.BrushInvertButton.RaiseEvent(ClickArgs);
+        Settle();
+        Assert.Equal(Avalonia.Media.Colors.Black, strip.BrushColorSwatch.Color);
+        strip.BrushInvertButton.RaiseEvent(ClickArgs);
+        Settle();
+        Assert.Equal(Avalonia.Media.Colors.White, strip.BrushColorSwatch.Color);
+        CloseWindow(window);
+    });
+
+    [Fact]
+    public Task TypeIcon_IsCircular_WithABlurredEdge() => ui.Run(() =>
+    {
+        var bitmap = UskEffect.App.Views.NoisePanel.ToBitmap(Enumerable.Repeat(1f, 64 * 64).ToArray());
+        Assert.Equal(bitmap.PixelSize.Width, bitmap.PixelSize.Height);
+        using var frame = bitmap.Lock();
+        byte Alpha(int x, int y) => System.Runtime.InteropServices.Marshal.ReadByte(frame.Address, y * frame.RowBytes + x * 4 + 3);
+        Assert.Equal(255, Alpha(32, 32));
+        Assert.Equal(0, Alpha(0, 0));
+        Assert.Equal(0, Alpha(63, 63));
+        Assert.InRange(Alpha(32, 7), 1, 254);
+        Assert.Equal(Alpha(32, 7), Alpha(7, 32));
     });
 
     private static Point CenterOf(Visual visual, Window window) =>
@@ -1084,12 +1937,12 @@ public sealed class UiTests(UiSession ui) : IClassFixture<UiSession>
     });
 
     [Fact]
-    public Task WorleyDistance_IsEnabledOnlyForWorley() => ui.Run(() =>
+    public Task WorleyDistance_ShowsOnlyForWorley() => ui.Run(() =>
     {
         var window = Open();
-        Assert.False(window.NoiseTab.WorleySegment.IsEnabled);
-        window.NoiseTab.TypeBox.SelectedIndex = (int)NoiseType.Worley;
-        Assert.True(window.NoiseTab.WorleySegment.IsEnabled);
+        Assert.False(window.NoiseTab.WorleyRow.IsVisible);
+        window.NoiseTab.SelectedType = NoiseType.Worley;
+        Assert.True(window.NoiseTab.WorleyRow.IsVisible);
         CloseWindow(window);
     });
 }

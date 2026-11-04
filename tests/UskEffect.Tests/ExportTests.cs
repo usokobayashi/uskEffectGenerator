@@ -10,6 +10,64 @@ public sealed class ExportTests
     private const int Width = 37;
     private const int Height = 19;
 
+    [Theory]
+    [InlineData(0, 0, 0, 255, 0, 0, 0, 0)]             // 黒は透明
+    [InlineData(255, 255, 255, 255, 255, 255, 255, 255)] // 白は不透明の白
+    [InlineData(128, 128, 128, 255, 255, 255, 255, 128)] // 灰は半透明の白
+    [InlineData(200, 0, 0, 255, 255, 0, 0, 200)]       // 色は保つ
+    [InlineData(255, 255, 255, 128, 255, 255, 255, 128)] // 元のアルファも引き継ぐ
+    public void BlackToAlpha_MovesBrightnessIntoAlpha(byte r, byte g, byte b, byte a, byte outR, byte outG, byte outB, byte outA)
+    {
+        var result = TextureExporter.BlackToAlpha([r, g, b, a]);
+        Assert.Equal([outR, outG, outB, outA], result);
+    }
+
+    [Fact]
+    public void BlackToAlpha_OnNoise_IsTransparentWhereBlack_InAFile()
+    {
+        var pixels = Ramp();
+        foreach (var format in new[] { ImageFileFormat.Png, ImageFileFormat.Tga })
+        {
+            string path = Path.Combine(Path.GetTempPath(), $"usk-black-{Guid.NewGuid():N}.{(format == ImageFileFormat.Png ? "png" : "tga")}");
+            try
+            {
+                TextureExporter.Save(path, pixels, Width, Height, ExportChannels.RgbaBlackToAlpha);
+                var image = UskEffect.Core.Imaging.ImageLoader.Load(path);
+                Assert.Equal(0, image.Rgba[3]);
+                Assert.Equal(255, image.Rgba[^1]);
+                Assert.Equal(255, image.Rgba[^4]);
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [Fact]
+    public void Gray_FromAnImage_TreatsTransparentAsBlack()
+    {
+        var image = new UskEffect.Graphics.ImageData(1, 1, [255, 255, 255, 128]);
+        Assert.InRange(image.ToLuminance()[0], 0.49f, 0.51f);
+    }
+
+    [Theory]
+    [InlineData(ExportTint.None, 255, 255, 255, 128, 255, 255, 255, 128)]      // 変えない
+    [InlineData(ExportTint.Multiply, 255, 255, 255, 128, 255, 0, 0, 128)]      // 半透明の白に赤を掛ける
+    [InlineData(ExportTint.Add, 255, 255, 255, 128, 255, 128, 128, 255)]       // 灰に赤を足すと明るくなる
+    [InlineData(ExportTint.Multiply, 0, 0, 0, 0, 0, 0, 0, 0)]                  // 透明は透明のまま
+    [InlineData(ExportTint.Add, 0, 0, 0, 0, 0, 0, 0, 0)]                       // 足しても穴を埋めない
+    [InlineData(ExportTint.Multiply, 0, 255, 0, 255, 0, 0, 0, 0)]              // 緑に赤を掛けると何も残らない
+    public void ApplyTint_PutsColorOnTheAlphaImage(ExportTint tint, byte r, byte g, byte b, byte a, byte outR, byte outG, byte outB, byte outA)
+    {
+        var image = new UskEffect.Graphics.ImageData(1, 1, [r, g, b, a]);
+        var result = TextureExporter.ApplyTint(image, tint, 1, 0, 0).Rgba;
+        Assert.InRange(result[0], outR - 1, outR + 1);
+        Assert.InRange(result[1], outG - 1, outG + 1);
+        Assert.InRange(result[2], outB - 1, outB + 1);
+        Assert.InRange(result[3], outA - 1, outA + 1);
+    }
+
     private static float[] Ramp()
     {
         var pixels = new float[Width * Height];

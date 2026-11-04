@@ -72,12 +72,46 @@ public readonly record struct PaintDab(double X, double Y, double PolarRadius = 
 /// <summary>ストロークの通り道の点。</summary>
 public readonly record struct StrokePoint(double X, double Y, double Pressure = 1);
 
+/// <summary>レイヤーの効果 (合成モード)。下のレイヤーとの重ね方。値は Shaders/Paint/Paint.hlsl の PSLayerBlend と同じ。</summary>
+public enum LayerBlendMode : uint
+{
+    Normal = 0,
+    Multiply = 1,
+    Add = 2,
+    Subtract = 3,
+    Screen = 4,
+    Overlay = 5,
+}
+
+/// <summary>レイヤーの縮小画像。RGBA の乗算済みアルファ。</summary>
+public sealed record LayerThumbnail(int LayerId, int Size, byte[] Rgba)
+{
+    /// <summary>一番下のベース (ノイズや読み込んだ画像) を表す番号。レイヤーの番号は 1 から。</summary>
+    public const int BaseLayerId = 0;
+}
+
 /// <summary>プロジェクトに保存するレイヤー (FR-15)。Image は乗算なし。画素は JSON ではなく ZIP 内の PNG に置く。</summary>
 public sealed record LayerData
 {
     public string Name { get; init; } = "";
     public bool Visible { get; init; } = true;
     public float Opacity { get; init; } = 1f;
+    public LayerBlendMode Blend { get; init; } = LayerBlendMode.Normal;
+
+    /// <summary>このレイヤーで生成するノイズや形。null ならペイントのレイヤー。</summary>
+    public NoiseSettings? Noise { get; init; }
+
+    /// <summary>色を反転する。</summary>
+    public bool Invert { get; init; }
+
+    /// <summary>マスクにする。白いほど、下のレイヤーを消す。</summary>
+    public bool IsMask { get; init; }
+
+    /// <summary>このレイヤーの繰り返し数とずらし量。</summary>
+    public float TilingX { get; init; } = 1f;
+    public float TilingY { get; init; } = 1f;
+    public float OffsetX { get; init; }
+    public float OffsetY { get; init; }
 
     [System.Text.Json.Serialization.JsonIgnore]
     public ImageData? Image { get; init; }
@@ -85,9 +119,6 @@ public sealed record LayerData
 
 /// <summary>極座標キャンバス上で円になるスタンプの設定 (FR-19 / FR-21)。</summary>
 public sealed record PolarStamp(double InnerRadius, double OuterRadius, bool FlipRadial, double TilingX, double TilingY, double ContentSize);
-
-/// <summary>継ぎ目の自動ブレンド (FR-13)。Width は境界から片側の幅で、テクスチャに対する割合。</summary>
-public sealed record SeamBlendSettings(SeamMode Axes = SeamMode.XY, double Width = 0.1, double Strength = 1);
 
 /// <summary>画面とテクスチャの対応。ストロークは表示の種類ごとの座標で補間してから、スタンプへ直す。</summary>
 public interface ICanvasMapping

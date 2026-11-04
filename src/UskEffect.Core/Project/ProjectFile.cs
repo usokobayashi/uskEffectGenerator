@@ -25,7 +25,7 @@ public static class ProjectFile
     /// <summary>形式を変えたら上げる。読込時、これより新しい形式は拒否する。</summary>
     /// 1: 設定のみ。2: 読み込んだ画像を images/source.png に保存。3: 描いた内容を images/paint.png に保存。
     /// 4: 複数のレイヤー。設定は project.json、画素は images/layer{番号}.png。
-    public const int CurrentFormatVersion = 4;
+    public const int CurrentFormatVersion = 5;
 
     private const string JsonEntryName = "project.json";
     private const string ImageEntryName = "images/source.png";

@@ -25,8 +25,7 @@
           <MenuItem Header="{DynamicResource S.Menu.View}">
             <MenuItem x:Name="ViewRectMenuItem" Header="{DynamicResource S.View.Rect}" />
             <MenuItem x:Name="ViewPolarMenuItem" Header="{DynamicResource S.View.Polar}" />
-            <MenuItem x:Name="ViewSeamMenuItem" Header="{DynamicResource S.View.Seam}" />
-            <MenuItem x:Name="ViewEffectMenuItem" Header="{DynamicResource S.View.Effect}" />
+            <MenuItem x:Name="ViewTileMenuItem" Header="{DynamicResource S.View.Tile}" />
             <Separator />
             <MenuItem x:Name="ZoomFitMenuItem" Header="{DynamicResource S.Menu.ZoomFit}" InputGesture="Ctrl+0" HotKey="Ctrl+D0" />
             <MenuItem x:Name="Zoom100MenuItem" Header="{DynamicResource S.Menu.Zoom100}" InputGesture="Ctrl+1" HotKey="Ctrl+D1" />
@@ -45,21 +44,6 @@
         </Button>
         <Button x:Name="ExportButton" Classes="ico" ToolTip.Tip="{DynamicResource S.Top.Export}" AutomationProperties.Name="{DynamicResource S.Top.Export}">
           <Path Classes="stroke icon" Data="{StaticResource Icon.Export}" />
-          <Button.Flyout>
-            <Flyout Placement="BottomEdgeAlignedLeft">
-              <StackPanel Width="{StaticResource Ue.Size.PolarPopup}" Spacing="{StaticResource Ue.Gap.Row}">
-                <TextBlock Classes="muted" Text="{DynamicResource S.Export.Channels}" />
-                <ComboBox x:Name="ExportChannelsBox" SelectedIndex="0">
-                  <ComboBoxItem Content="{DynamicResource S.Export.Gray8}" />
-                  <ComboBoxItem Content="{DynamicResource S.Export.Gray16}" />
-                  <ComboBoxItem Content="{DynamicResource S.Export.RgbaOpaque}" />
-                  <ComboBoxItem Content="{DynamicResource S.Export.RgbaWhiteAlpha}" />
-                  <ComboBoxItem Content="{DynamicResource S.Export.RgbaSource}" />
-                </ComboBox>
-                <Button x:Name="ExportRunButton" Classes="btn" Content="{DynamicResource S.Export.Run}" HorizontalAlignment="Right" />
-              </StackPanel>
-            </Flyout>
-          </Button.Flyout>
         </Button>
         <Button x:Name="UndoButton" Classes="ico" IsEnabled="False" ToolTip.Tip="{DynamicResource S.Top.Undo}" AutomationProperties.Name="{DynamicResource S.Top.Undo}">
           <Path Classes="stroke icon" Data="{StaticResource Icon.Undo}" />
@@ -68,12 +52,6 @@
           <Path Classes="stroke icon" Data="{StaticResource Icon.Redo}" />
         </Button>
       </StackPanel>
-
-      <ui:SegmentedControl x:Name="ModeSegment" DockPanel.Dock="Right" Width="{StaticResource Ue.Size.ModeSegment}"
-                           VerticalAlignment="Center" SelectedIndex="0">
-        <ListBoxItem Content="{DynamicResource S.Mode.Generate}" />
-        <ListBoxItem Content="{DynamicResource S.Mode.Paint}" />
-      </ui:SegmentedControl>
 
       <TextBlock x:Name="ProjectNameText" DockPanel.Dock="Right" Classes="muted" VerticalAlignment="Center"
                  MaxWidth="{StaticResource Ue.Size.ProjectName}" Margin="8,0,10,0" TextTrimming="CharacterEllipsis" />

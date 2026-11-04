@@ -1,0 +1,75 @@
+<!-- 書き出し。書き出しボタンを押すとすぐ開き、出力ボタンは書き出しボタンと同じ位置に来る -->
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="using:UskEffect.App.Controls.Ui"
+        x:Class="UskEffect.App.Views.ExportWindow"
+        Title="{DynamicResource S.Export.Title}"
+        WindowDecorations="None" SizeToContent="WidthAndHeight" CanResize="False" ShowInTaskbar="False"
+        WindowStartupLocation="Manual" Background="{StaticResource Ue.Panel}">
+  <Border x:Name="Frame" BorderBrush="{StaticResource Ue.Line}" BorderThickness="{StaticResource Ue.Line.All}" Padding="12">
+    <StackPanel Spacing="10">
+      <StackPanel Orientation="Horizontal" Spacing="{StaticResource Ue.Gap.Normal}">
+        <Button x:Name="ConfirmButton" Classes="btn" Width="72" Height="28" HorizontalContentAlignment="Center" Content="{DynamicResource S.Export.Confirm}" />
+        <Button x:Name="CancelButton" Classes="btn" Height="28" Content="{DynamicResource S.Dialog.Cancel}" />
+      </StackPanel>
+      <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+        <Panel Width="320" Height="320" VerticalAlignment="Top">
+          <ui:CheckerBackdrop />
+          <Image x:Name="PreviewImage" Stretch="Uniform" />
+        </Panel>
+        <StackPanel Grid.Column="1" Width="300" Spacing="{StaticResource Ue.Gap.Row}">
+          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{StaticResource Ue.Gap.Normal}">
+            <TextBlock Classes="rowLabel" Text="{DynamicResource S.Export.Output}" />
+            <ui:SegmentedControl x:Name="OutputSegment" Grid.Column="1" SelectedIndex="1">
+              <ListBoxItem Content="{DynamicResource S.Output.Alpha}" Padding="2,0" />
+              <ListBoxItem Content="{DynamicResource S.Output.Mask}" Padding="2,0" />
+            </ui:SegmentedControl>
+          </Grid>
+          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{StaticResource Ue.Gap.Normal}">
+            <TextBlock Classes="rowLabel" Text="{DynamicResource S.Noise.Resolution}" />
+            <ComboBox x:Name="ResolutionBox" Grid.Column="1" SelectedIndex="1">
+              <ComboBoxItem Content="256" />
+              <ComboBoxItem Content="512" />
+              <ComboBoxItem Content="1024" />
+              <ComboBoxItem Content="2048" />
+              <ComboBoxItem x:Name="CustomSizeItem" IsVisible="False" />
+            </ComboBox>
+          </Grid>
+          <DockPanel x:Name="Bit16Row" MinHeight="{StaticResource Ue.Size.Field}">
+            <ui:SwitchButton x:Name="Bit16Switch" DockPanel.Dock="Right" VerticalAlignment="Center" AutomationProperties.Name="{DynamicResource S.Export.Bit16}" />
+            <TextBlock Text="{DynamicResource S.Export.Bit16}" VerticalAlignment="Center" />
+          </DockPanel>
+          <Grid x:Name="TintRow" Classes="reveal" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="{StaticResource Ue.Gap.Normal}">
+            <TextBlock Classes="rowLabel" Text="{DynamicResource S.Export.Tint}" />
+            <ui:SegmentedControl x:Name="TintSegment" Grid.Column="1" SelectedIndex="0">
+              <ListBoxItem Content="{DynamicResource S.Export.TintNone}" Padding="2,0" />
+              <ListBoxItem Content="{DynamicResource S.Layer.BlendMultiply}" Padding="2,0" />
+              <ListBoxItem Content="{DynamicResource S.Layer.BlendAdd}" Padding="2,0" />
+            </ui:SegmentedControl>
+            <ui:ColorSwatch x:Name="TintSwatch" Grid.Column="2" Classes="reveal" Color="#FFFFFF" VerticalAlignment="Center" AutomationProperties.Name="{DynamicResource S.Export.Tint}" />
+          </Grid>
+          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{StaticResource Ue.Gap.Normal}">
+            <TextBlock Classes="rowLabel" Text="{DynamicResource S.Export.Name}" />
+            <TextBox x:Name="NameBox" Grid.Column="1" AutomationProperties.Name="{DynamicResource S.Export.Name}" />
+          </Grid>
+          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{StaticResource Ue.Gap.Normal}">
+            <TextBlock Classes="rowLabel" Text="{DynamicResource S.Export.Format}" />
+            <ui:SegmentedControl x:Name="FormatSegment" Grid.Column="1" SelectedIndex="0">
+              <ListBoxItem Content="PNG" Padding="2,0" />
+              <ListBoxItem x:Name="TgaItem" Content="TGA" Padding="2,0" />
+            </ui:SegmentedControl>
+          </Grid>
+          <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="{StaticResource Ue.Gap.Normal}">
+            <TextBlock Classes="rowLabel" Text="{DynamicResource S.Export.Folder}" />
+            <TextBox x:Name="FolderBox" Grid.Column="1" AutomationProperties.Name="{DynamicResource S.Export.Folder}" />
+            <Button x:Name="BrowseButton" Grid.Column="2" Classes="btn" Content="{DynamicResource S.Export.Browse}" />
+          </Grid>
+          <DockPanel MinHeight="{StaticResource Ue.Size.Field}">
+            <ui:SwitchButton x:Name="OverwriteSwitch" DockPanel.Dock="Right" VerticalAlignment="Center" AutomationProperties.Name="{DynamicResource S.Export.AllowOverwrite}" />
+            <TextBlock Text="{DynamicResource S.Export.AllowOverwrite}" VerticalAlignment="Center" />
+          </DockPanel>
+        </StackPanel>
+      </Grid>
+    </StackPanel>
+  </Border>
+</Window>

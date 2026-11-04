@@ -1,7 +1,6 @@
 using Vortice.Direct3D;
 using Vortice.Direct3D11;
 using Vortice.Mathematics;
-using UskEffect.Graphics.Analysis;
 
 namespace UskEffect.Graphics;
 
@@ -41,7 +40,7 @@ public sealed class PreviewRenderer : IDisposable
 
     public void Render(ID3D11RenderTargetView target, int width, int height, ID3D11ShaderResourceView? source,
         int sourceWidth, int sourceHeight, bool sourceIsColor,
-        PreviewSettings settings, float timeSeconds, SeamAnalysis? seam, float contentMargin, CanvasView? view = null)
+        PreviewSettings settings, float contentMargin, CanvasView? view = null)
     {
         view ??= new CanvasView();
         var context = _gpu.Context;
@@ -51,25 +50,18 @@ public sealed class PreviewRenderer : IDisposable
         if (_vertexShader is null || _pixelShader is null || source is null)
             return;
 
+        float viewTiling = settings.Mode == PreviewMode.Tile4x4 ? PreviewSettings.TilePreviewCount : 1f;
         var constants = new PreviewConstants
         {
             ViewportWidth = width,
             ViewportHeight = height,
             TextureWidth = sourceWidth,
             TextureHeight = sourceHeight,
-            ViewMode = (uint)settings.Mode,
-            Time = timeSeconds,
-            ScrollSpeedU = settings.ScrollSpeedU,
-            ScrollSpeedV = settings.ScrollSpeedV,
+            ViewMode = settings.Mode == PreviewMode.Tile4x4 ? (uint)PreviewMode.Rect : (uint)settings.Mode,
             InnerRadius = settings.Polar.InnerRadius,
             OuterRadius = settings.Polar.OuterRadius,
             RotationRadians = settings.Polar.RotationDegrees * (MathF.PI / 180f),
             PolarFlags = (settings.Polar.FlipAngular ? 1u : 0u) | (settings.Polar.FlipRadial ? 2u : 0u),
-            // 解析前はヒートマップを出さない
-            HeatmapMode = seam is null ? 0u : (uint)settings.Heatmap,
-            MeanValueDiff = (float)(seam?.MeanValueDiff ?? 1.0),
-            MeanGradientDiff = (float)(seam?.MeanGradientDiff ?? 1.0),
-            HeatThreshold = Math.Max(1f, settings.HeatThreshold),
             StageR = StageColor.R,
             StageG = StageColor.G,
             StageB = StageColor.B,
@@ -79,8 +71,8 @@ public sealed class PreviewRenderer : IDisposable
             ViewZoom = (float)view.Zoom,
             ViewRotation = (float)(view.RotationDegrees * Math.PI / 180),
             SourceIsColor = sourceIsColor ? 1u : 0u,
-            TilingX = settings.TilingX,
-            TilingY = settings.TilingY,
+            TilingX = settings.TilingX * viewTiling,
+            TilingY = settings.TilingY * viewTiling,
             OffsetX = settings.OffsetX,
             OffsetY = settings.OffsetY,
         };

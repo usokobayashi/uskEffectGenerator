@@ -24,8 +24,10 @@ cbuffer PaintParams : register(b0)
     float  BlendWidth;     // 継ぎ目のブレンド: 境界から片側の幅 (テクスチャに対する割合)
     float  BlendStrength;
 
-    uint   BlendAxis;      // 0: 左右の継ぎ目, 1: 上下の継ぎ目
-    float3 _Padding;
+    uint   BlendAxis;      // 0: 左右の継ぎ目, 1: 上下の継ぎ目。合成モードと透過の変換にも使う
+    uint   LayerInvert;    // レイヤーの色を反転する
+    uint   LayerMask;      // レイヤーをマスクにする
+    float  _Padding;
 };
 
 Texture2D<float4> Source : register(t0);
@@ -157,27 +159,12 @@ float4 PSPolarBlur(FullOutput input) : SV_Target
     return inside ? sum / BlurTaps * coverage * Flow : float4(0, 0, 0, 0);
 }
 
-// 継ぎ目の両側を、境界で折り返した向かい側と混ぜる。境界で同じ値になり、幅の端で元の値に戻る
-float4 PSSeamBlend(FullOutput input) : SV_Target
-{
-    int2 texel = int2(input.Position.xy);
-    int size = BlendAxis == 0 ? (int)CanvasSize.x : (int)CanvasSize.y;
-    int position = BlendAxis == 0 ? texel.x : texel.y;
-    float distanceToEdge = min(position + 0.5, size - position - 0.5);
-    float mixAmount = 0.5 * saturate(1.0 - distanceToEdge / max(BlendWidth * size, 1.0)) * BlendStrength;
-    if (mixAmount <= 0.0)
-        return 0;
-
-    int2 mirrored = BlendAxis == 0 ? int2(size - 1 - texel.x, texel.y) : int2(texel.x, size - 1 - texel.y);
-    float4 a = Composite.Load(int3(texel, 0));
-    float4 b = Composite.Load(int3(mirrored, 0));
-    return lerp(float4(a.rgb * a.a, a.a), float4(b.rgb * b.a, b.a), mixAmount);
-}
-
 // 合成の 1 段目: 元の画像を乗算済みにして敷く
 float4 PSSourcePremultiplied(FullOutput input) : SV_Target
 {
     float4 source = Source.Load(int3(input.Position.xy, 0));
+    if (SourceIsColor == 2)
+        return float4(0, 0, 0, 0); // 透明から始める
     if (SourceIsColor == 0)
         return float4(source.rrr, 1);
     return float4(source.rgb * source.a, source.a);
@@ -189,11 +176,99 @@ float4 PSLayerOver(FullOutput input) : SV_Target
     return Layer.Load(int3(input.Position.xy, 0)) * Flow;
 }
 
+// レイヤー効果 (合成モード)。BlendAxis に LayerBlendMode が入る。Composite は下のレイヤーの写し
+float4 PSLayerBlend(FullOutput input) : SV_Target
+{
+    int3 p = int3(input.Position.xy, 0);
+    float4 src = Layer.Load(p);
+    if (LayerInvert != 0)
+        src.rgb = src.a - src.rgb; // 乗算済みアルファなので、アルファから引く
+    src *= Flow;
+    float4 below = Composite.Load(p);
+
+    // マスク: 白いほど下を消す。色のある画像は明るさで扱う。透明なところは消さない
+    if (LayerMask != 0)
+        return below * (1.0 - saturate(dot(src.rgb, float3(0.299, 0.587, 0.114))));
+
+    float3 s = src.a > 0.0 ? src.rgb / src.a : 0.0;
+    float3 b = below.a > 0.0 ? below.rgb / below.a : 0.0;
+
+    float3 mixed = s;
+    if (BlendAxis == 1)
+        mixed = b * s;
+    else if (BlendAxis == 2)
+        mixed = saturate(b + s);
+    else if (BlendAxis == 3)
+        mixed = saturate(b - s);
+    else if (BlendAxis == 4)
+        mixed = 1.0 - (1.0 - b) * (1.0 - s);
+    else if (BlendAxis == 5)
+        mixed = lerp(2.0 * b * s, 1.0 - 2.0 * (1.0 - b) * (1.0 - s), step(0.5, b));
+
+    return float4(src.rgb * (1.0 - below.a) + below.rgb * (1.0 - src.a) + src.a * below.a * mixed,
+                  src.a + below.a * (1.0 - src.a));
+}
+
+// レイヤーの生成結果 (グレースケール) を不透明な 1 枚にする
+float4 PSGeneratedLayer(FullOutput input) : SV_Target
+{
+    return float4(Source.Load(int3(input.Position.xy, 0)).rrr * Color, 1);
+}
+
+// レイヤーの繰り返し。PolarTiling に繰り返し数、DabCenter にずらし量が入る
+float4 PSLayerTile(FullOutput input) : SV_Target
+{
+    return Layer.SampleLevel(LinearSampler, input.Uv * PolarTiling + DabCenter, 0);
+}
+
+// 縮小画像: 描いた内容
+float4 PSThumbnailLayer(FullOutput input) : SV_Target
+{
+    return Layer.SampleLevel(LinearSampler, input.Uv * PolarTiling + DabCenter, 0);
+}
+
+// 縮小画像: ベース
+float4 PSThumbnailSource(FullOutput input) : SV_Target
+{
+    float4 source = Source.SampleLevel(LinearSampler, input.Uv, 0);
+    if (SourceIsColor == 0)
+        return float4(source.rrr, 1);
+    return float4(source.rgb * source.a, source.a);
+}
+
+// 縮小画像: レイヤーの生成結果
+float4 PSThumbnailGenerated(FullOutput input) : SV_Target
+{
+    return float4(Source.SampleLevel(LinearSampler, input.Uv * PolarTiling + DabCenter, 0).rrr * Color, 1);
+}
+
 // 合成の 3 段目: 乗算なしへ戻す (読み込んだ画像と同じ扱いにする)
 float4 PSStraighten(FullOutput input) : SV_Target
 {
     float4 c = Layer.Load(int3(input.Position.xy, 0));
-    return c.a > 0.0 ? float4(c.rgb / c.a, c.a) : float4(0, 0, 0, 0);
+
+    // 白黒マスク: 明るさだけにする。透明なところは黒
+    if (BlendAxis == 2)
+    {
+        float value = dot(c.rgb, float3(0.299, 0.587, 0.114));
+        return float4(value, value, value, 1);
+    }
+
+    if (c.a <= 0.0)
+        return float4(0, 0, 0, 0);
+    float3 color = c.rgb / c.a;
+    float alpha = c.a;
+
+    // アルファ: 一番明るい成分をアルファへ移す。色は保つので、灰色は半透明の白になる
+    if (BlendAxis == 1)
+    {
+        float peak = max(color.r, max(color.g, color.b));
+        if (peak <= 0.0)
+            return float4(0, 0, 0, 0);
+        color /= peak;
+        alpha *= peak;
+    }
+    return float4(color, alpha);
 }
 
 // 大きさが変わったレイヤーの引き継ぎ

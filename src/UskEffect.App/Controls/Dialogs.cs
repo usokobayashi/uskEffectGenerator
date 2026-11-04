@@ -23,6 +23,11 @@ public static class Dialogs
         ShowAsync(owner, Loc.T("S.Dialog.UnsavedTitle"), Loc.F("S.Dialog.UnsavedBody", documentName), dismissed: UnsavedChoice.Cancel,
             (Loc.T("S.Dialog.Save"), UnsavedChoice.Save), (Loc.T("S.Dialog.Discard"), UnsavedChoice.Discard), (Loc.T("S.Dialog.Cancel"), UnsavedChoice.Cancel));
 
+    /// <summary>同じ名前のファイルを上書きしてよいか確認する。ウィンドウを閉じた場合は上書きしない。</summary>
+    public static Task<bool> AskOverwriteAsync(Window owner, string path) =>
+        ShowAsync(owner, Loc.T("S.Export.OverwriteTitle"), Loc.F("S.Export.OverwriteBody", path), dismissed: false,
+            (Loc.T("S.Export.Overwrite"), true), (Loc.T("S.Dialog.Cancel"), false));
+
     /// <summary>ボタンを押さずにウィンドウを閉じたときは dismissed を返す。</summary>
     private static async Task<T> ShowAsync<T>(Window owner, string title, string message, T dismissed, params (string Label, T Value)[] buttons)
     {

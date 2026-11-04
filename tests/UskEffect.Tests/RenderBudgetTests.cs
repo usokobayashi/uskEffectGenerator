@@ -48,13 +48,9 @@ public sealed class RenderBudgetTests(ITestOutputHelper output)
             Median(30, _ => { }); // シェーダーのコンパイルを除く
             double idle = Median(300, _ => { });
             double dragging = Median(300, f => engine.Noise = new NoiseSettings { Resolution = 512, Seed = (uint)f, Octaves = 8 });
-            engine.Preview = new PreviewSettings { Mode = PreviewMode.Effect };
-            engine.Timeline.Play();
-            double effect = Median(300, _ => { });
 
-            output.WriteLine($"操作なし {idle:0.00} ms / スライダー操作相当 (毎フレーム生成・8 オクターブ) {dragging:0.00} ms / エフェクト再生 {effect:0.00} ms");
+            output.WriteLine($"操作なし {idle:0.00} ms / スライダー操作相当 (毎フレーム生成・8 オクターブ) {dragging:0.00} ms");
             Assert.True(dragging < 33.3, $"512×512 の操作時 30fps を満たさない ({dragging:0.00} ms)");
-            Assert.True(effect < 16.7, $"アニメーション 60fps を満たさない ({effect:0.00} ms)");
         }
         finally
         {

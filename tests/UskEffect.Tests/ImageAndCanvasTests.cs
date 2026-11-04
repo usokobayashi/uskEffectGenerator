@@ -270,7 +270,7 @@ public sealed unsafe class PreviewRenderFixture : IDisposable
     {
         lock (_sync)
         {
-            _renderer.Render(_targetView, Size, Size, _sourceView, 2, 2, sourceIsColor: true, settings, 0f, null, 0f, view);
+            _renderer.Render(_targetView, Size, Size, _sourceView, 2, 2, sourceIsColor: true, settings, 0f, view);
             _gpu.Context.CopyResource(_staging, _target);
             var mapped = _gpu.Context.Map(_staging, 0, MapMode.Read);
             var bytes = new byte[Size * Size * 4];

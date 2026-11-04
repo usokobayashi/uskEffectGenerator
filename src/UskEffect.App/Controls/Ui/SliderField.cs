@@ -215,6 +215,12 @@ public sealed class SliderField : RangeBase
             _middle.IsVisible = Minimum < 0 && Maximum > 0;
     }
 
+    private void SetDragging(bool dragging)
+    {
+        _dragging = dragging;
+        Classes.Set("dragging", dragging);
+    }
+
     private double KnobWidth => _knob?.Bounds.Width ?? 0;
 
     /// <summary>数値の入力を始める。</summary>
@@ -303,7 +309,7 @@ public sealed class SliderField : RangeBase
             return;
         }
 
-        _dragging = true;
+        SetDragging(true);
         SetFromPointer(position.X);
     }
 
@@ -314,7 +320,7 @@ public sealed class SliderField : RangeBase
         if (_clickPending && !_pressOnValueBox && Math.Abs(x - _pressX) > DragThreshold)
         {
             _clickPending = false;
-            _dragging = true;
+            SetDragging(true);
         }
         if (_dragging)
             SetFromPointer(x);
@@ -326,7 +332,7 @@ public sealed class SliderField : RangeBase
         // キャプチャの解除で OnPointerCaptureLost が走るので、先に状態を取っておく
         bool clicked = _clickPending;
         _clickPending = false;
-        _dragging = false;
+        SetDragging(false);
         e.Pointer.Capture(null);
         if (clicked)
             BeginEdit();
@@ -335,7 +341,7 @@ public sealed class SliderField : RangeBase
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     {
         base.OnPointerCaptureLost(e);
-        _dragging = false;
+        SetDragging(false);
         _clickPending = false;
     }
 

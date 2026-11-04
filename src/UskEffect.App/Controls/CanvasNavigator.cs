@@ -21,17 +21,15 @@ internal sealed class CanvasNavigator
     private readonly D3DHost _host;
     private readonly Func<CanvasView> _get;
     private readonly Action<CanvasView> _set;
-    private readonly Func<bool> _isEnabled;
     private DragMode _drag;
     private int _dragButton;
     private int _lastX, _lastY, _startX, _startY;
 
-    public CanvasNavigator(D3DHost host, Func<CanvasView> get, Action<CanvasView> set, Func<bool> isEnabled)
+    public CanvasNavigator(D3DHost host, Func<CanvasView> get, Action<CanvasView> set)
     {
         _host = host;
         _get = get;
         _set = set;
-        _isEnabled = isEnabled;
         host.HostPointerDown += OnDown;
         host.HostPointerMoved += OnMoved;
         host.HostPointerUp += OnUp;
@@ -46,15 +44,13 @@ internal sealed class CanvasNavigator
 
     private void OnWheel(int delta, int x, int y)
     {
-        if (!_isEnabled())
-            return;
         var (cx, cy) = FromCenter(x, y);
         _set(_get().ZoomAt(cx, cy, Math.Pow(WheelStep, delta / 120.0)));
     }
 
     private void OnDown(int button, int x, int y)
     {
-        if (!_isEnabled() || _drag != DragMode.None)
+        if (_drag != DragMode.None)
             return;
 
         bool space = Win32.IsSpaceDown();

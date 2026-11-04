@@ -15,12 +15,42 @@ public partial class MainWindow
     private const double BrushSizeStep = 1.25;
 
     private CanvasPainter? _painter;
-    private bool _seamBlendPreviewing;
 
-    private bool IsPaintMode => Top.ModeSegment.SelectedIndex == 1;
+    // レイヤーを開いている間のキャンバスのクリックは、閉じるだけで描かない
+    private bool CanPaint => IsActiveLayerVisible && ActiveLayer is { Noise: null } && !IsPopupOpen;
 
-    // エフェクトの表示は動いていて画素と対応しない。自動ブレンドの確認中は描くと取り消せなくなる
-    private bool CanPaint => IsPaintMode && Strip.Mode != PreviewMode.Effect && !_seamBlendPreviewing && IsActiveLayerVisible;
+    private bool IsPopupOpen => Rail.IsLayerOpen || NoiseTab.IsTypeMenuOpen || Strip.IsPopupOpen;
+
+    private void ClosePopups()
+    {
+        Rail.CloseLayers();
+        NoiseTab.CloseTypeMenu();
+        Strip.ClosePopups();
+    }
+
+    // 閉じた後の入力欄にフォーカスが残っていても、入力中として扱わない
+    private static bool IsEditingText(TopLevel top) =>
+        top.FocusManager?.GetFocusedElement() is TextBox { IsEffectivelyVisible: true };
+
+    private void OnAnyKeyDown(TopLevel top, KeyEventArgs e)
+    {
+        // 別の窓 (確認や書き出し) のキーは、その窓のもの
+        if (e.Handled || _exportWindowOpen)
+            return;
+
+        bool editing = IsEditingText(top);
+        if (e.Key == Key.Escape && !editing && IsPopupOpen)
+        {
+            ClosePopups();
+            e.Handled = true;
+            return;
+        }
+        if (editing)
+            return;
+        OnPaintKeyDown(e);
+        if (!e.Handled)
+            OnUndoKeyDown(e);
+    }
 
     // 見えないレイヤーに描くと結果が分からないので描かせない
     private bool IsActiveLayerVisible =>
@@ -32,43 +62,52 @@ public partial class MainWindow
     {
         _painter = new CanvasPainter(Viewport, _engine!, () => CurrentBrush, () => CanPaint, MarkDirty);
 
-        Top.ModeSegment.SelectionChanged += (_, _) => ApplyPaintMode();
         Rail.ToolChanged += () => Strip.Tool = Rail.Tool;
-        Strip.ClearPaintRequested += ClearActiveLayer;
-        Strip.Changed += ShowPaintAvailability;
         Viewport.HostPointerDown += (button, _, _) =>
         {
-            if (button == 0 && !Win32.IsSpaceDown())
+            if (button == 0 && !Win32.IsSpaceDown() && !IsPopupOpen)
                 ExplainWhyNotPainting();
+            // キャンバスは別の窓なので、外をクリックしたことが Avalonia に届かない。描くかどうかの判定の後で閉じる
+            if (IsPopupOpen)
+            {
+                ClosePopups();
+                // ポップアップの入力欄に残ったフォーカスを外す。残るとキーが届かない
+                Focus();
+            }
         };
-        AddHandler(KeyDownEvent, OnPaintKeyDown, RoutingStrategies.Tunnel);
-        AddHandler(KeyDownEvent, OnUndoKeyDown, RoutingStrategies.Tunnel);
+        // ポップアップにフォーカスがあると、キーは窓を通らない。中身でも受ける
+        AddHandler(KeyDownEvent, (_, e) => OnAnyKeyDown(this, e), RoutingStrategies.Tunnel);
+        foreach (Control popup in new Control[] { Strip.BrushPopup, Strip.PolarPopup, LayerTab, NoiseTab.TypeMenu })
+            popup.AddHandler(KeyDownEvent, (_, e) => OnAnyKeyDown(TopLevel.GetTopLevel(popup) ?? this, e), RoutingStrategies.Tunnel);
 
         Top.UndoMenuItem.Click += (_, _) => UndoOrRedo(undo: true);
         Top.UndoButton.Click += (_, _) => UndoOrRedo(undo: true);
         Top.RedoMenuItem.Click += (_, _) => UndoOrRedo(undo: false);
         Top.RedoButton.Click += (_, _) => UndoOrRedo(undo: false);
 
-        LayerTab.LayerSelected += id => ChangeLayers(() => _engine!.SetActiveLayer(id), dirty: false);
+        LayerTab.BlendChanged += (id, blend) => ChangeLayers(() => _engine!.SetLayerBlend(id, blend));
+        LayerTab.LayerSelected += SelectLayer;
         LayerTab.VisibleToggled += (id, visible) => ChangeLayers(() => _engine!.SetLayerVisible(id, visible));
         LayerTab.OpacityChanged += (id, opacity) => ChangeLayers(() => _engine!.SetLayerOpacity(id, opacity));
-        LayerTab.AddRequested += () => ChangeLayers(() => _engine!.AddLayer());
+        LayerTab.AddPaintRequested += () => ChangeLayers(() => _engine!.AddLayer());
+        LayerTab.AddNoiseRequested += () =>
+        {
+            Rail.CloseLayers();
+            NoiseTab.PickTypeForNewLayer(Rail.LayerButton, Avalonia.Controls.PlacementMode.RightEdgeAlignedBottom);
+        };
+        NoiseTab.NewLayerTypeChosen += AddNoiseLayer;
+        LayerTab.AddImageRequested += async () =>
+        {
+            Rail.CloseLayers();
+            await PickImageLayerAsync();
+        };
+        LayerTab.InvertToggled += (id, invert) => ChangeLayers(() => _engine!.SetLayerInvert(id, invert));
+        LayerTab.MaskToggled += (id, isMask) => ChangeLayers(() => _engine!.SetLayerMask(id, isMask));
         LayerTab.RemoveRequested += id => ChangeLayers(() => _engine!.RemoveLayer(id));
         LayerTab.MoveRequested += (id, delta) => ChangeLayers(() => _engine!.MoveLayer(id, delta));
+        _engine!.TransparentBase = true;
         RefreshLayers();
 
-        SeamTab.ManualFixRequested += StartManualSeamFix;
-        SeamTab.BlendStarted += StartSeamBlend;
-        SeamTab.BlendChanged += () => _engine?.PreviewSeamBlend(SeamTab.ReadBlend());
-        SeamTab.BlendApplied += () => EndSeamBlend(apply: true);
-        SeamTab.BlendCancelled += () => EndSeamBlend(apply: false);
-        Closing += (_, _) =>
-        {
-            if (_seamBlendPreviewing)
-                EndSeamBlend(apply: false);
-        };
-
-        ApplyPaintMode();
     }
 
     private void ChangeLayers(Action change, bool dirty = true)
@@ -77,7 +116,6 @@ public partial class MainWindow
         RefreshLayers();
         if (dirty)
             MarkDirty();
-        ShowPaintAvailability();
     }
 
     private void RefreshLayers()
@@ -85,8 +123,74 @@ public partial class MainWindow
         if (_engine is null)
             return;
         LayerTab.Show(_engine.Layers, _engine.ActiveLayerId);
+        ShowCurrentLayerOnRail();
+        SyncNoiseTarget();
+        ApplyPaintAvailability();
         RefreshUndoButtons();
     }
+
+    private LayerState? ActiveLayer => _engine?.Layers.FirstOrDefault(l => l.Id == _engine.ActiveLayerId);
+
+    private void ShowCurrentLayerOnRail()
+    {
+        if (_engine is null)
+            return;
+        var layers = _engine.Layers;
+        int active = layers.ToList().FindIndex(l => l.Id == _engine.ActiveLayerId);
+        if (active >= 0)
+            Rail.ShowCurrentLayer((active + 1).ToString(), layers[active].Name, layers[active].Visible, LayerTab.ThumbnailOf(layers[active].Id));
+    }
+
+    private void SelectLayer(int id) => ChangeLayers(() => _engine!.SetActiveLayer(id), dirty: false);
+
+    // 選んだレイヤーの設定をノイズの欄へ出す。元に戻したときにも追いかける
+    private void SyncNoiseTarget()
+    {
+        if (ActiveLayer is not { } layer)
+            return;
+        bool same = _shownNoiseTarget == layer.Id && NoiseTab.IsNoiseLayer == layer.Noise is not null
+            && (layer.Noise is null || NoiseTab.Read() == layer.Noise with { Resolution = NoiseTab.Resolution })
+            && NoiseTab.ReadTexture() == (layer.TilingX, layer.TilingY, layer.OffsetX, layer.OffsetY);
+        if (same)
+            return;
+        _shownNoiseTarget = layer.Id;
+        NoiseTab.ShowLayer(layer.Name, layer.Noise, layer.TilingX, layer.TilingY, layer.OffsetX, layer.OffsetY);
+    }
+
+    private void OnNoiseTabChanged()
+    {
+        ApplySettings();
+        if (_engine is null || _suppressApply || !NoiseTab.IsNoiseLayer)
+            return;
+        ChangeLayers(() => _engine.SetLayerNoise(_engine.ActiveLayerId, NoiseTab.Read()));
+    }
+
+    // 始めたばかりなら、最初のレイヤーにする
+    internal void AddNoiseLayer(NoiseType type)
+    {
+        var noise = new NoiseSettings { Resolution = NoiseTab.Resolution, Type = type };
+        if (_engine?.IsPristine == true)
+        {
+            ChangeLayers(() => _engine.SetLayers([new LayerData { Name = Loc.T("S.Layer.FirstNoiseName"), Noise = noise }]), dirty: false);
+            return;
+        }
+        ChangeLayers(() => _engine!.AddLayer(noise));
+    }
+
+    private void ShowStartTypeMenu()
+    {
+        if (_engine?.IsPristine == true && !_closed)
+            NoiseTab.PickTypeForNewLayer(Viewport, Avalonia.Controls.PlacementMode.Center);
+    }
+
+    private void OnLayerTextureChanged()
+    {
+        if (_engine is null || _suppressApply)
+            return;
+        var (tilingX, tilingY, offsetX, offsetY) = NoiseTab.ReadTexture();
+        ChangeLayers(() => _engine.SetLayerTexture(_engine.ActiveLayerId, tilingX, tilingY, offsetX, offsetY));
+    }
+
 
     private void RefreshUndoButtons()
     {
@@ -98,7 +202,7 @@ public partial class MainWindow
 
     private void UndoOrRedo(bool undo)
     {
-        if (_engine is null || _seamBlendPreviewing)
+        if (_engine is null)
             return;
         if (undo)
             _engine.Undo();
@@ -109,11 +213,8 @@ public partial class MainWindow
     }
 
     // メニューの HotKey にすると、数値の入力中の Ctrl+Z まで奪うのでここで受ける
-    private void OnUndoKeyDown(object? sender, KeyEventArgs e)
+    private void OnUndoKeyDown(KeyEventArgs e)
     {
-        if (FocusManager?.GetFocusedElement() is TextBox)
-            return;
-
         bool undo = e.Key == Key.Z && e.KeyModifiers == KeyModifiers.Control;
         bool redo = (e.Key == Key.Y && e.KeyModifiers == KeyModifiers.Control)
             || (e.Key == Key.Z && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift));
@@ -123,60 +224,21 @@ public partial class MainWindow
         e.Handled = true;
     }
 
-    // 継ぎ目を中央に寄せた表示のまま描くと、端をまたいで手で直せる
-    private void StartManualSeamFix()
+    // 描けるのはペイントのレイヤーだけ。道具とブラシの欄もそれに合わせる
+    private void ApplyPaintAvailability()
     {
-        Top.ModeSegment.SelectedIndex = 1;
-        Strip.Mode = PreviewMode.SeamCheck;
-        Status.ShowMessage(Loc.T("S.Seam.ManualHint"));
-    }
-
-    // 確認中はプレビューが保存されないよう、ファイル操作と元の画像の変更を止める
-    private void StartSeamBlend()
-    {
-        _seamBlendPreviewing = true;
-        Top.IsEnabled = false;
-        NoiseTab.IsEnabled = false;
-        LayerTab.IsEnabled = false;
-        Strip.Mode = PreviewMode.SeamCheck;
-        _engine?.Cursor = null;
-        _engine?.PreviewSeamBlend(SeamTab.ReadBlend());
-    }
-
-    private void EndSeamBlend(bool apply)
-    {
-        _seamBlendPreviewing = false;
-        Top.IsEnabled = true;
-        NoiseTab.IsEnabled = true;
-        LayerTab.IsEnabled = true;
-        SeamTab.ShowBlendControls(false);
-        if (apply)
-        {
-            _engine?.CommitSeamBlend();
-            MarkDirty();
-        }
-        else
-        {
-            _engine?.CancelSeamBlend();
-        }
-    }
-
-    private void ApplyPaintMode()
-    {
-        bool paint = IsPaintMode;
+        bool paint = ActiveLayer is { Noise: null };
         Rail.IsPaintMode = paint;
         Strip.ShowBrushSettings = paint;
-        if (paint && Strip.Mode == PreviewMode.Effect)
-            Strip.Mode = PreviewMode.Rect;
-        else if (!paint)
+        if (!paint)
+        {
             _painter?.HideCursor();
-        if (!paint && _engine is not null)
-            _engine.Cursor = null;
+            _engine?.Cursor = null;
+        }
     }
 
     private string? PaintBlockedMessage =>
-        !IsPaintMode ? "S.Paint.NeedPaintMode"
-        : Strip.Mode == PreviewMode.Effect ? "S.Paint.NotInEffect"
+        ActiveLayer is { Noise: not null } ? "S.Paint.NoiseLayer"
         : !IsActiveLayerVisible ? "S.Paint.LayerHidden"
         : null;
 
@@ -187,28 +249,10 @@ public partial class MainWindow
             Status.ShowMessage(Loc.T(message));
     }
 
-    private void ShowPaintAvailability()
-    {
-        if (!IsPaintMode)
-            return;
-        string? message = PaintBlockedMessage;
-        if (message is null)
-            return;
-        Status.ShowMessage(Loc.T(message));
-        if (_engine is not null)
-            _engine.Cursor = null;
-    }
-
-    private void ClearActiveLayer()
-    {
-        _engine?.ClearActiveLayer();
-        MarkDirty();
-    }
-
     // 操作の参考は CLIP STUDIO PAINT。B ブラシ、E 消しゴム、J ぼかし (色混ぜ)、[ ] で大きさ
-    private void OnPaintKeyDown(object? sender, KeyEventArgs e)
+    private void OnPaintKeyDown(KeyEventArgs e)
     {
-        if (!IsPaintMode || e.KeyModifiers != KeyModifiers.None || FocusManager?.GetFocusedElement() is TextBox)
+        if (ActiveLayer is not { Noise: null } || e.KeyModifiers != KeyModifiers.None)
             return;
 
         switch (e.Key)

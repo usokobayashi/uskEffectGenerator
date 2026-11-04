@@ -3,7 +3,6 @@ using System.Numerics;
 using UskEffect.Core.Export;
 using UskEffect.Core.Project;
 using UskEffect.Graphics;
-using UskEffect.Graphics.Effects;
 
 namespace UskEffect.Tests;
 
@@ -26,18 +25,9 @@ public sealed class ProjectFileTests : IDisposable
         },
         Preview = new PreviewSettings
         {
-            Mode = PreviewMode.Effect, ScrollSpeedU = 0.3f, ScrollSpeedV = -0.2f,
+            Mode = PreviewMode.Polar,
             Polar = new PolarSettings(0.1f, 0.9f, 45f, FlipAngular: true, FlipRadial: true),
-            Heatmap = HeatmapMode.Gradient, HeatThreshold = 7f,
         },
-        Effect = new EffectSettings
-        {
-            Mapping = EffectMapping.Polar, Blend = EffectBlend.Alpha, Background = EffectBackground.Gray,
-            Mask = EffectMask.None, Rotation = new(10f, 200f), Scale = new(0.5f, 1.5f), Dissolve = new(0.1f, 0.9f),
-            DissolveEdgeWidth = 0.2f, DissolveEdgeColor = new Vector3(0.1f, 0.2f, 0.3f), Alpha = new(0.8f, 0.2f),
-            Color = new(new Vector3(1f, 0.5f, 0f), new Vector3(0f, 0.5f, 1f)), TextureAsAlpha = false,
-        },
-        Timeline = new TimelineSettings { Duration = 3.5, Loop = false },
         Export = new ExportSettings { Channels = ExportChannels.RgbaWhiteAlpha },
     };
 
@@ -52,8 +42,6 @@ public sealed class ProjectFileTests : IDisposable
 
         Assert.Equal(original.Noise, loaded.Noise);
         Assert.Equal(original.Preview, loaded.Preview);
-        Assert.Equal(original.Effect, loaded.Effect);
-        Assert.Equal(original.Timeline, loaded.Timeline);
         Assert.Equal(original.Export, loaded.Export);
         Assert.False(File.Exists(path + ".tmp"));
     }
@@ -112,7 +100,47 @@ public sealed class ProjectFileTests : IDisposable
 
         Assert.Equal(99u, loaded.Noise.Seed);
         Assert.Equal(new NoiseSettings().Frequency, loaded.Noise.Frequency);
-        Assert.Equal(new EffectSettings(), loaded.Effect);
+    }
+
+    [Fact]
+    public void LayerBlendAndGeneration_AreSaved()
+    {
+        string path = PathFor("layer-effect.uskfx");
+        ProjectFile.Save(path, new ProjectDocument
+        {
+            Layers = [new UskEffect.Graphics.Painting.LayerData
+            {
+                Name = "a", Blend = UskEffect.Graphics.Painting.LayerBlendMode.Subtract,
+                Noise = new NoiseSettings { Type = NoiseType.ShapeCircle, Shape = new ShapeSettings { Size = 0.2f } },
+            }],
+        });
+
+        var layer = ProjectFile.Load(path).Layers![0];
+
+        Assert.Equal(UskEffect.Graphics.Painting.LayerBlendMode.Subtract, layer.Blend);
+        Assert.Equal(NoiseType.ShapeCircle, layer.Noise!.Type);
+        Assert.Equal(0.2f, layer.Noise.Shape.Size);
+    }
+
+    // エフェクト機能を廃止する前のプロジェクトも開ける。エフェクトの設定は読み飛ばす
+    [Fact]
+    public void OldProject_WithEffectSettings_StillLoads()
+    {
+        string path = PathFor("old-effect.uskfx");
+        WriteRawProject(path, """
+            {
+              "formatVersion": 4,
+              "Noise": { "Seed": 7 },
+              "Preview": { "Mode": "Effect", "ScrollSpeedU": 0.3, "TilingX": 2 },
+              "Effect": { "Mapping": "Polar", "Blend": "Alpha" },
+              "Timeline": { "Duration": 3.5, "Loop": false }
+            }
+            """);
+
+        var loaded = ProjectFile.Load(path);
+
+        Assert.Equal(7u, loaded.Noise.Seed);
+        Assert.Equal(2f, loaded.Preview.TilingX);
     }
 
     [Fact]

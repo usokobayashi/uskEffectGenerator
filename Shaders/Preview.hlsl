@@ -1,24 +1,18 @@
-// プレビュー描画: 矩形 / 極座標 / シーム検証
-// 同じソーステクスチャを Wrap サンプラーで読み、UV スクロールでアニメーションさせる。
+// プレビュー描画: 矩形 / 極座標 (タイリングの表示は矩形を繰り返す)
+// 同じソーステクスチャを Wrap サンプラーで読む。
 
 cbuffer PreviewParams : register(b0)
 {
     float2 ViewportSize;
     float2 TextureSize;
 
-    uint   ViewMode;          // 0: Rect, 2: Polar, 3: SeamCheck
-    float  Time;
-    float2 ScrollSpeed;       // UV / 秒
+    uint   ViewMode;          // 0: Rect, 2: Polar
+    float3 _ViewModePadding;
 
     float  InnerRadius;       // 外接円を 1 とした比率
     float  OuterRadius;
     float  Rotation;          // ラジアン。表示を反時計回りに回す
     uint   PolarFlags;        // bit0: 角度方向反転, bit1: 内外反転
-
-    uint   HeatmapMode;       // 0: Off, 1: 値差分, 2: 勾配差分
-    float  MeanValueDiff;     // 内部の隣接画素差の平均 (CPU の継ぎ目解析から)
-    float  MeanGradientDiff;  // 内部の 2 階差分の平均
-    float  HeatThreshold;     // 平均の何倍から色を付けるか
 
     float3 StageColor;        // 内容の外側の色
     float  ContentMargin;     // 内容の周りの余白 [px]
@@ -96,37 +90,10 @@ float4 LoadRaw(int2 texel)
     return Source.Load(int3((texel % size + size) % size, 0));
 }
 
-// 継ぎ目の解析と同じ輝度
-float Luminance(float4 s)
-{
-    return SourceIsColor != 0 ? dot(s.rgb, float3(0.299, 0.587, 0.114)) : s.r;
-}
-
-float LoadWrapped(int2 texel)
-{
-    return Luminance(LoadRaw(texel));
-}
-
 // 色にする。画像の透明部分には市松模様を透かす
 float3 Shade(float4 s, float2 pixel)
 {
     return SourceIsColor != 0 ? lerp(Checker(pixel), s.rgb, s.a) : s.rrr;
-}
-
-// 周期境界を含めた局所差分を内部平均で割った比。継ぎ目があると境界の行・列で大きくなる
-float SeamHeat(float2 uv)
-{
-    int2 p = (int2)floor(frac(uv) * TextureSize);
-    float c = LoadWrapped(p);
-    float l = LoadWrapped(p - int2(1, 0));
-    float d = LoadWrapped(p - int2(0, 1));
-
-    if (HeatmapMode == 1)
-        return max(abs(c - l), abs(c - d)) / max(MeanValueDiff, 1e-6);
-
-    float r = LoadWrapped(p + int2(1, 0));
-    float u = LoadWrapped(p + int2(0, 1));
-    return max(abs(r - 2.0 * c + l), abs(u - 2.0 * c + d)) / max(MeanGradientDiff, 1e-6);
 }
 
 float4 PSMain(VSOutput input) : SV_Target
@@ -142,7 +109,6 @@ float4 PSMain(VSOutput input) : SV_Target
     float c = cos(-ViewRotation);
     float2 local = float2(c * p.x - s * p.y, s * p.x + c * p.y) / (content * scale) + 0.5;
 
-    float2 scroll = ScrollSpeed * Time;
     float2 uv;
 
     if (ViewMode == 2)
@@ -153,29 +119,14 @@ float4 PSMain(VSOutput input) : SV_Target
         polar.y = -polar.y;
         if (!PolarToUv(polar, uv))
             return float4(Checker(pixel), 1);
-        uv = uv * Tiling + UvOffset + scroll;
+        uv = uv * Tiling + UvOffset;
     }
     else
     {
         if (any(local < 0.0) || any(local > 1.0))
             return float4(Outside(local, content * scale), 1);
 
-        if (ViewMode == 3)
-        {
-            // 半タイルずらして、左右・上下の端を中央の十字に持ってくる
-            uv = local + 0.5;
-            float3 color = Shade(Source.SampleLevel(WrapSampler, uv, 0), pixel) * 0.75;
-            if (HeatmapMode != 0)
-            {
-                float heat = SeamHeat(uv);
-                float alpha = saturate((heat - HeatThreshold) / HeatThreshold);
-                float3 heatColor = lerp(float3(1.0, 0.85, 0.1), float3(1.0, 0.1, 0.05), alpha);
-                color = lerp(color, heatColor, alpha * 0.9);
-            }
-            return float4(color, 1);
-        }
-
-        uv = local * Tiling + UvOffset + scroll;
+        uv = local * Tiling + UvOffset;
 
         // 大きく拡大したら画素の境界が見えるようにする
         if (scale / max(Tiling.x, Tiling.y) >= 4.0)

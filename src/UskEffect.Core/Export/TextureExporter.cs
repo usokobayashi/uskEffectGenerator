@@ -6,6 +6,14 @@ public enum ImageFileFormat
     Tga,
 }
 
+/// <summary>書き出しのときに色を乗せる方法。</summary>
+public enum ExportTint
+{
+    None,
+    Multiply,
+    Add,
+}
+
 /// <summary>書き出すチャンネル構成 (FR-07)。</summary>
 public enum ExportChannels
 {
@@ -23,6 +31,9 @@ public enum ExportChannels
 
     /// <summary>読み込んだ画像の RGBA をそのまま。ノイズでは RgbaOpaque と同じ。</summary>
     RgbaSource,
+
+    /// <summary>黒を透明にする。明るさを A へ移し、色は明るさで割って保つので、加算合成と同じ見た目で重ねられる。</summary>
+    RgbaBlackToAlpha,
 }
 
 /// <summary>0..1 の float テクスチャを PNG / TGA に書き出す。</summary>
@@ -58,10 +69,72 @@ public static class TextureExporter
         {
             if (channels == ExportChannels.RgbaSource)
                 WriteRgba(stream, format, image.Width, image.Height, image.Rgba);
+            else if (channels == ExportChannels.RgbaBlackToAlpha)
+                WriteRgba(stream, format, image.Width, image.Height, BlackToAlpha(image.Rgba));
             else
                 Write(stream, format, image.ToLuminanceForChannels(channels), image.Width, image.Height, channels, image);
         }
         File.Move(temp, path, overwrite: true);
+    }
+
+    /// <summary>
+    /// アルファへ変換した画像に色を乗せる。透明なところは透明のまま。
+    /// 乗せた後の一番明るい成分をアルファにするので、乗算で暗くなったところは透けていく。
+    /// </summary>
+    public static UskEffect.Graphics.ImageData ApplyTint(UskEffect.Graphics.ImageData image, ExportTint tint, float r, float g, float b)
+    {
+        if (tint == ExportTint.None)
+            return image;
+
+        var source = image.Rgba;
+        var result = new byte[source.Length];
+        for (int i = 0; i < source.Length; i += 4)
+        {
+            float alpha = source[i + 3] / 255f;
+            if (alpha <= 0f)
+                continue;
+
+            // アルファへ移した明るさを戻してから色を乗せる
+            float pr = source[i] / 255f * alpha, pg = source[i + 1] / 255f * alpha, pb = source[i + 2] / 255f * alpha;
+            if (tint == ExportTint.Multiply)
+            {
+                pr *= r;
+                pg *= g;
+                pb *= b;
+            }
+            else
+            {
+                pr = MathF.Min(pr + r, 1f);
+                pg = MathF.Min(pg + g, 1f);
+                pb = MathF.Min(pb + b, 1f);
+            }
+
+            float peak = MathF.Max(pr, MathF.Max(pg, pb));
+            if (peak <= 0f)
+                continue;
+            result[i] = ToByte(pr / peak);
+            result[i + 1] = ToByte(pg / peak);
+            result[i + 2] = ToByte(pb / peak);
+            result[i + 3] = ToByte(peak);
+        }
+        return new UskEffect.Graphics.ImageData(image.Width, image.Height, result);
+    }
+
+    /// <summary>黒を透明にする。元のアルファも引き継ぐ。</summary>
+    public static byte[] BlackToAlpha(byte[] rgba)
+    {
+        var result = new byte[rgba.Length];
+        for (int i = 0; i < rgba.Length; i += 4)
+        {
+            int peak = Math.Max(rgba[i], Math.Max(rgba[i + 1], rgba[i + 2]));
+            if (peak == 0)
+                continue;
+            result[i] = (byte)MathF.Round(rgba[i] * 255f / peak);
+            result[i + 1] = (byte)MathF.Round(rgba[i + 1] * 255f / peak);
+            result[i + 2] = (byte)MathF.Round(rgba[i + 2] * 255f / peak);
+            result[i + 3] = (byte)MathF.Round(peak * rgba[i + 3] / 255f);
+        }
+        return result;
     }
 
     private static void WriteRgba(Stream output, ImageFileFormat format, int width, int height, byte[] rgba)
@@ -110,7 +183,8 @@ public static class TextureExporter
                 }
                 else
                 {
-                    rgba = ToRgba(pixels, channels == ExportChannels.RgbaWhiteAlpha);
+                    // グレースケールでは、黒の透明化は白 + アルファと同じ結果になる
+                    rgba = ToRgba(pixels, channels is ExportChannels.RgbaWhiteAlpha or ExportChannels.RgbaBlackToAlpha);
                 }
                 WriteRgba(output, format, width, height, rgba);
                 break;

@@ -36,13 +36,18 @@ internal struct PaintConstants
     public float BlendStrength;
 
     public uint BlendAxis;
-    public float Padding0;
-    public float Padding1;
+    public uint LayerInvert;
+    public uint LayerMask;
     public float Padding2;
 }
 
 /// <summary>画面に見せるレイヤーの状態 (FR-15)。リストの先頭が一番下。</summary>
-public sealed record LayerState(int Id, string Name, bool Visible, float Opacity);
+public sealed record LayerState(int Id, string Name, bool Visible, float Opacity,
+    LayerBlendMode Blend = LayerBlendMode.Normal, NoiseSettings? Noise = null, bool Invert = false, bool IsMask = false,
+    float TilingX = 1f, float TilingY = 1f, float OffsetX = 0f, float OffsetY = 0f)
+{
+    public bool IsTiled => TilingX != 1f || TilingY != 1f || OffsetX != 0f || OffsetY != 0f;
+}
 
 /// <summary>
 /// 編集レイヤーへのスタンプ、元の画像との合成、元に戻す (FR-14 / FR-15 / 要件 §3.4)。
@@ -52,6 +57,11 @@ public sealed record LayerState(int Id, string Name, bool Visible, float Opacity
 /// </summary>
 public sealed unsafe class PaintRenderer : IDisposable
 {
+    private const int ThumbnailSize = 32;
+
+    // 生成の変更は、この間隔より短ければ (スライダーの操作中なら) 1 回の「元に戻す」にまとめる
+    private const long NoiseEditMergeMilliseconds = 500;
+
     private const Format PixelFormat = Format.R16G16B16A16_Float;
     private const int ComponentsPerPixel = 4;
     private const int BytesPerPixel = ComponentsPerPixel * sizeof(short);
@@ -136,10 +146,15 @@ public sealed unsafe class PaintRenderer : IDisposable
     private ID3D11PixelShader? _blurShader;
     private ID3D11PixelShader? _polarBrushShader;
     private ID3D11PixelShader? _polarBlurShader;
-    private ID3D11PixelShader? _seamBlendShader;
     private ID3D11PixelShader? _sourceShader;
     private ID3D11PixelShader? _layerOverShader;
     private ID3D11PixelShader? _straightenShader;
+    private ID3D11PixelShader? _layerBlendShader;
+    private ID3D11PixelShader? _generatedShader;
+    private ID3D11PixelShader? _layerTileShader;
+    private ID3D11PixelShader? _thumbnailLayerShader;
+    private ID3D11PixelShader? _thumbnailSourceShader;
+    private ID3D11PixelShader? _thumbnailGeneratedShader;
     private ID3D11PixelShader? _resampleShader;
     private ID3D11PixelShader? _cursorShader;
 
@@ -156,6 +171,43 @@ public sealed unsafe class PaintRenderer : IDisposable
     private ID3D11Texture2D? _accumulated;
     private ID3D11RenderTargetView? _accumulatedTarget;
     private ID3D11ShaderResourceView? _accumulatedView;
+
+    // 生成した内容の上に描いた内容を重ねた、1 枚分のレイヤー
+    private ID3D11Texture2D? _resolved;
+    private ID3D11RenderTargetView? _resolvedTarget;
+    private ID3D11ShaderResourceView? _resolvedView;
+
+    // レイヤーを繰り返した結果
+    private ID3D11Texture2D? _tiled;
+    private ID3D11RenderTargetView? _tiledTarget;
+    private ID3D11ShaderResourceView? _tiledView;
+
+    // 合成モードで下のレイヤーを読むための写し
+    private ID3D11Texture2D? _belowCopy;
+    private ID3D11ShaderResourceView? _belowCopyView;
+
+    // レイヤーの縮小画像
+    private ID3D11Texture2D? _thumbnail;
+    private ID3D11RenderTargetView? _thumbnailTarget;
+    private ID3D11Texture2D? _thumbnailStaging;
+
+    // レイヤーごとの生成結果。レイヤーの番号で持つ
+    private sealed class GeneratedLayer(NoiseGenerator generator) : IDisposable
+    {
+        public NoiseGenerator Generator { get; } = generator;
+        public NoiseSettings? Settings;
+        public int Width, Height;
+
+        public void Dispose() => Generator.Dispose();
+    }
+
+    private readonly Dictionary<int, GeneratedLayer> _generated = [];
+    private readonly NoiseGenerator? _noiseShaderOwner;
+    private bool _transparentBase;
+    private CompositeOutput _output;
+    private System.Numerics.Vector3 _generatedTint = System.Numerics.Vector3.One;
+    private long _lastNoiseEdit;
+    private int _noiseEditGroup;
     private ID3D11Texture2D? _composite;
     private ID3D11RenderTargetView? _compositeTarget;
 
@@ -163,7 +215,6 @@ public sealed unsafe class PaintRenderer : IDisposable
     private ID3D11Texture2D? _shadow;
     private LayerTexture? _shadowOwner;
     private bool _shadowHadContent;
-    private bool _previewingBlend;
 
     // 合成をやり直す範囲と、履歴に入れる範囲。Right <= Left なら無し
     private int _dirtyLeft, _dirtyTop, _dirtyRight, _dirtyBottom;
@@ -172,13 +223,10 @@ public sealed unsafe class PaintRenderer : IDisposable
     public int Width { get; private set; }
     public int Height { get; private set; }
 
-    /// <summary>どれかのレイヤーに何か描かれたか。消しゴムで消し切っても true のまま。</summary>
-    public bool HasPaint => _layers.Any(l => l.Texture.HasContent);
+    /// <summary>どれかのレイヤーに描かれたか、生成があるか。消しゴムで消し切っても true のまま。</summary>
+    public bool HasPaint => _layers.Any(l => l.Texture.HasContent || l.State.Noise is not null);
 
     public ID3D11ShaderResourceView? CompositeView { get; private set; }
-
-    /// <summary>継ぎ目の自動ブレンドの確認中か。この間のレイヤーはまだ確定していない。</summary>
-    public bool IsPreviewingBlend => _previewingBlend;
 
     public IReadOnlyList<LayerState> Layers { get; private set; } = [];
     public int ActiveLayerId => _activeId;
@@ -186,14 +234,16 @@ public sealed unsafe class PaintRenderer : IDisposable
     public bool CanRedo => _redo.Count > 0;
 
     /// <summary>まだ何もしていない最初の状態か。保存するものがない。</summary>
-    public bool IsPristine => !HasPaint && _layers.Length == 1 && _undo.Count == 0 && _redo.Count == 0 && _layers[0].State is { Visible: true, Opacity: 1f };
+    public bool IsPristine => !HasPaint && _layers.Length == 1 && _undo.Count == 0 && _redo.Count == 0 && _layers[0].State is { Visible: true, Opacity: 1f, Blend: LayerBlendMode.Normal, Noise: null, Invert: false, IsMask: false, IsTiled: false };
 
     private bool HasEdit => _editRight > _editLeft && _editBottom > _editTop;
     private LayerEntry Active => _layers.First(l => l.State.Id == _activeId);
 
-    public PaintRenderer(GpuDevice gpu)
+    /// <param name="noiseShaderOwner">レイヤーの生成に使うシェーダーを持つ生成器。null なら生成しない。</param>
+    public PaintRenderer(GpuDevice gpu, NoiseGenerator? noiseShaderOwner = null)
     {
         _gpu = gpu;
+        _noiseShaderOwner = noiseShaderOwner;
         var device = gpu.Device;
         _constantBuffer = device.CreateBuffer(new BufferDescription(
             (uint)System.Runtime.CompilerServices.Unsafe.SizeOf<PaintConstants>(), BindFlags.ConstantBuffer));
@@ -213,14 +263,19 @@ public sealed unsafe class PaintRenderer : IDisposable
         var blur = ShaderCompiler.CompileFile(path, "PSBlur", "ps_5_0");
         var polarBrush = ShaderCompiler.CompileFile(path, "PSPolarBrush", "ps_5_0");
         var polarBlur = ShaderCompiler.CompileFile(path, "PSPolarBlur", "ps_5_0");
-        var seamBlend = ShaderCompiler.CompileFile(path, "PSSeamBlend", "ps_5_0");
         var source = ShaderCompiler.CompileFile(path, "PSSourcePremultiplied", "ps_5_0");
         var layerOver = ShaderCompiler.CompileFile(path, "PSLayerOver", "ps_5_0");
         var straighten = ShaderCompiler.CompileFile(path, "PSStraighten", "ps_5_0");
         var resample = ShaderCompiler.CompileFile(path, "PSResample", "ps_5_0");
         var cursor = ShaderCompiler.CompileFile(path, "PSCursor", "ps_5_0");
+        var layerBlend = ShaderCompiler.CompileFile(path, "PSLayerBlend", "ps_5_0");
+        var generated = ShaderCompiler.CompileFile(path, "PSGeneratedLayer", "ps_5_0");
+        var layerTile = ShaderCompiler.CompileFile(path, "PSLayerTile", "ps_5_0");
+        var thumbnailLayer = ShaderCompiler.CompileFile(path, "PSThumbnailLayer", "ps_5_0");
+        var thumbnailSource = ShaderCompiler.CompileFile(path, "PSThumbnailSource", "ps_5_0");
+        var thumbnailGenerated = ShaderCompiler.CompileFile(path, "PSThumbnailGenerated", "ps_5_0");
 
-        var all = new[] { fullVs, dabVs, brush, blur, polarBrush, polarBlur, seamBlend, source, layerOver, straighten, resample, cursor };
+        var all = new[] { fullVs, dabVs, brush, blur, polarBrush, polarBlur, source, layerOver, straighten, resample, cursor, layerBlend, generated, layerTile, thumbnailLayer, thumbnailSource, thumbnailGenerated };
         if (all.Any(r => !r.Succeeded))
             return string.Join(Environment.NewLine, all.Select(r => r.Errors).Where(e => e is not null).Distinct());
 
@@ -232,12 +287,17 @@ public sealed unsafe class PaintRenderer : IDisposable
         _blurShader = device.CreatePixelShader(blur.Bytecode!);
         _polarBrushShader = device.CreatePixelShader(polarBrush.Bytecode!);
         _polarBlurShader = device.CreatePixelShader(polarBlur.Bytecode!);
-        _seamBlendShader = device.CreatePixelShader(seamBlend.Bytecode!);
         _sourceShader = device.CreatePixelShader(source.Bytecode!);
         _layerOverShader = device.CreatePixelShader(layerOver.Bytecode!);
         _straightenShader = device.CreatePixelShader(straighten.Bytecode!);
         _resampleShader = device.CreatePixelShader(resample.Bytecode!);
         _cursorShader = device.CreatePixelShader(cursor.Bytecode!);
+        _layerBlendShader = device.CreatePixelShader(layerBlend.Bytecode!);
+        _generatedShader = device.CreatePixelShader(generated.Bytecode!);
+        _layerTileShader = device.CreatePixelShader(layerTile.Bytecode!);
+        _thumbnailLayerShader = device.CreatePixelShader(thumbnailLayer.Bytecode!);
+        _thumbnailSourceShader = device.CreatePixelShader(thumbnailSource.Bytecode!);
+        _thumbnailGeneratedShader = device.CreatePixelShader(thumbnailGenerated.Bytecode!);
         return null;
     }
 
@@ -256,7 +316,6 @@ public sealed unsafe class PaintRenderer : IDisposable
             ClearHistory();
             ReleaseShadow();
             ClearEdit();
-            _previewingBlend = false;
         }
         ReleaseComposite();
         Width = width;
@@ -345,7 +404,6 @@ public sealed unsafe class PaintRenderer : IDisposable
     public void SetLayers(IReadOnlyList<LayerData>? layers)
     {
         ClearEdit();
-        _previewingBlend = false;
         _layers = [];
         ClearHistory();
         ReleaseShadow();
@@ -361,7 +419,7 @@ public sealed unsafe class PaintRenderer : IDisposable
         {
             var texture = data.Image is { } image ? Upload(image) : new LayerTexture();
             _textures.Add(texture);
-            return new LayerEntry(new LayerState(_nextId++, data.Name, data.Visible, Math.Clamp(data.Opacity, 0f, 1f)), texture);
+            return new LayerEntry(new LayerState(_nextId++, data.Name, data.Visible, Math.Clamp(data.Opacity, 0f, 1f), data.Blend, data.Noise, data.Invert, data.IsMask, data.TilingX, data.TilingY, data.OffsetX, data.OffsetY), texture);
         }).ToArray();
         _activeId = _layers[^1].State.Id;
         CollectTextures();
@@ -377,6 +435,14 @@ public sealed unsafe class PaintRenderer : IDisposable
         Name = entry.State.Name,
         Visible = entry.State.Visible,
         Opacity = entry.State.Opacity,
+        Blend = entry.State.Blend,
+        Noise = entry.State.Noise,
+        Invert = entry.State.Invert,
+        IsMask = entry.State.IsMask,
+        TilingX = entry.State.TilingX,
+        TilingY = entry.State.TilingY,
+        OffsetX = entry.State.OffsetX,
+        OffsetY = entry.State.OffsetY,
         Image = entry.Texture is { HasContent: true, Texture: { } texture } ? ReadBack(texture, entry.Texture.Width, entry.Texture.Height, premultiplied: true) : null,
     }).ToArray();
 
@@ -419,18 +485,32 @@ public sealed unsafe class PaintRenderer : IDisposable
     private LayerState NewState()
     {
         int id = _nextId++;
-        return new LayerState(id, $"レイヤー {id}", true, 1f);
+        return new LayerState(id, $"ペイント {id}", true, 1f);
     }
 
     private void PublishLayers() => Layers = _layers.Select(l => l.State).ToArray();
 
     // --- レイヤーの操作。どれも元に戻せる ---
 
-    public void AddLayer()
+    /// <param name="noise">ノイズのレイヤーにする設定。null ならペイントのレイヤー。</param>
+    public void AddLayer(NoiseSettings? noise = null)
     {
         var texture = new LayerTexture();
         _textures.Add(texture);
-        var entry = new LayerEntry(NewState(), texture);
+        var state = NewState();
+        if (noise is not null)
+            state = state with { Noise = noise, Name = $"ノイズ {state.Id}" };
+        var entry = new LayerEntry(state, texture);
+        int index = Array.FindIndex(_layers, l => l.State.Id == _activeId) + 1;
+        ChangeStructure([.. _layers[..index], entry, .. _layers[index..]], entry.State.Id);
+    }
+
+    /// <summary>画像をレイヤーとして追加する。描き足したり、マスクや合成モードに使ったりできる。</summary>
+    public void AddImageLayer(ImageData image, string name)
+    {
+        var texture = Upload(image);
+        _textures.Add(texture);
+        var entry = new LayerEntry(NewState() with { Name = name }, texture);
         int index = Array.FindIndex(_layers, l => l.State.Id == _activeId) + 1;
         ChangeStructure([.. _layers[..index], entry, .. _layers[index..]], entry.State.Id);
     }
@@ -463,6 +543,38 @@ public sealed unsafe class PaintRenderer : IDisposable
     /// <summary>スライダーの操作中は 1 回の変更としてまとめる。</summary>
     public void SetLayerOpacity(int id, float opacity) =>
         UpdateState(id, s => s with { Opacity = Math.Clamp(opacity, 0f, 1f) }, mergeKey: $"opacity:{id}");
+
+    public void SetLayerInvert(int id, bool invert) =>
+        UpdateState(id, s => s with { Invert = invert }, mergeKey: null);
+
+    public void SetLayerMask(int id, bool isMask) =>
+        UpdateState(id, s => s with { IsMask = isMask }, mergeKey: null);
+
+    /// <summary>レイヤーの繰り返しを変える。スライダーの操作中は 1 回の変更としてまとめる。</summary>
+    public void SetLayerTexture(int id, float tilingX, float tilingY, float offsetX, float offsetY) =>
+        UpdateState(id, s => s with { TilingX = tilingX, TilingY = tilingY, OffsetX = offsetX, OffsetY = offsetY }, mergeKey: $"texture:{id}");
+
+    public void SetLayerBlend(int id, LayerBlendMode blend) =>
+        UpdateState(id, s => s with { Blend = blend }, mergeKey: null);
+
+    /// <summary>レイヤーの生成を変える。null で生成をやめる。スライダーの操作中は 1 回の変更としてまとめる。</summary>
+    public void SetLayerNoise(int id, NoiseSettings? noise)
+    {
+        long now = Environment.TickCount64;
+        if (now - _lastNoiseEdit > NoiseEditMergeMilliseconds)
+            _noiseEditGroup++;
+        _lastNoiseEdit = now;
+        UpdateState(id, s => s with { Noise = noise }, mergeKey: $"noise:{id}:{_noiseEditGroup}");
+    }
+
+    /// <summary>シェーダーを読み直したので、生成をやり直す。</summary>
+    public void InvalidateGenerated()
+    {
+        foreach (var generated in _generated.Values)
+            generated.Dispose();
+        _generated.Clear();
+        MarkAllDirty();
+    }
 
     public void SetActiveLayer(int id)
     {
@@ -859,110 +971,278 @@ public sealed unsafe class PaintRenderer : IDisposable
 
     // --- 継ぎ目の自動ブレンド ---
 
-    /// <summary>
-    /// 継ぎ目を自動でブレンドしたプレビューを選択中のレイヤーに作る。
-    /// 2 回目以降は編集前の写しから作り直す。元の画像は変更しない。
-    /// </summary>
-    public void PreviewSeamBlend(SeamBlendSettings settings, ID3D11ShaderResourceView source, bool sourceIsColor)
-    {
-        if (_composite is null || _fullVertexShader is null || _seamBlendShader is null)
-            return;
-
-        if (!_previewingBlend)
-        {
-            CommitEdit();
-            _previewingBlend = true;
-        }
-        BeginEdit();
-        RestoreFromShadow();
-
-        var layer = Active.Texture;
-        if (settings.Axes.HasFlag(SeamMode.X))
-            DrawSeamBlend(layer, settings, 0, source, sourceIsColor);
-        if (settings.Axes.HasFlag(SeamMode.Y))
-            DrawSeamBlend(layer, settings, 1, source, sourceIsColor);
-        AddEditRect(0, 0, Width, Height);
-    }
-
-    // 左右を混ぜた結果に上下を混ぜるので、軸ごとに合成し直す
-    private void DrawSeamBlend(LayerTexture layer, SeamBlendSettings settings, uint axis, ID3D11ShaderResourceView source, bool sourceIsColor)
-    {
-        UpdateComposite(source, sourceIsColor);
-
-        var constants = new PaintConstants
-        {
-            CanvasWidth = Width,
-            CanvasHeight = Height,
-            SourceIsColor = sourceIsColor ? 1u : 0u,
-            BlendWidth = (float)Math.Clamp(settings.Width, 0, 0.5),
-            BlendStrength = (float)Math.Clamp(settings.Strength, 0, 1),
-            BlendAxis = axis,
-        };
-        var context = _gpu.Context;
-        context.UpdateSubresource(constants, _constantBuffer);
-
-        SetCommonState(_overBlend);
-        context.OMSetRenderTargets(layer.Target!);
-        context.RSSetViewport(0, 0, Width, Height);
-        context.VSSetShader(_fullVertexShader);
-        context.PSSetShader(_seamBlendShader);
-        context.PSSetShaderResource(2, CompositeView!);
-        context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
-        context.Draw(3, 0);
-        ResetState();
-
-        layer.HasContent = true;
-        MarkAllDirty();
-    }
-
-    /// <summary>プレビューを確定する。元に戻せる。</summary>
-    public void CommitSeamBlend()
-    {
-        _previewingBlend = false;
-        CommitEdit();
-    }
-
-    /// <summary>プレビューを取り消す。</summary>
-    public void CancelSeamBlend()
-    {
-        if (!_previewingBlend)
-            return;
-        _previewingBlend = false;
-        RestoreFromShadow();
-    }
-
-    private void RestoreFromShadow()
-    {
-        if (_shadow is null || _shadowOwner?.Texture is null)
-            return;
-        _gpu.Context.CopyResource(_shadowOwner.Texture, _shadow);
-        _shadowOwner.HasContent = _shadowHadContent;
-        ClearEdit();
-        MarkAllDirty();
-    }
-
     // --- 合成 ---
 
     /// <summary>変わった範囲の合成をやり直す。表示しているレイヤーを下から順に重ねる。</summary>
-    public void UpdateComposite(ID3D11ShaderResourceView source, bool sourceIsColor)
+    /// <param name="transparentBase">一番下を透明から始める。false なら source の上に重ねる。</param>
+    /// <param name="output">最後に変換する形 (プレビューと書き出しの切り替え)。</param>
+    public void UpdateComposite(ID3D11ShaderResourceView source, bool sourceIsColor, bool transparentBase = false, CompositeOutput output = CompositeOutput.Color)
     {
+        _transparentBase = transparentBase;
+        _output = output;
         if (_compositeTarget is null || _accumulatedTarget is null || _fullVertexShader is null
             || _sourceShader is null || _layerOverShader is null || _straightenShader is null
             || _dirtyRight <= _dirtyLeft || _dirtyBottom <= _dirtyTop)
             return;
 
-        var context = _gpu.Context;
+        // 繰り返すと、変わった範囲の外にも同じ絵が出る
+        if (_layers.Any(l => l.State.IsTiled))
+            MarkAllDirty();
 
         DrawCompositePass(_accumulatedTarget, _sourceShader, null, source, null, 1f, sourceIsColor);
         foreach (var entry in _layers)
         {
-            if (entry.State.Visible && entry.State.Opacity > 0f && entry.Texture is { HasContent: true, View: { } view })
+            if (!entry.State.Visible || entry.State.Opacity <= 0f || ResolveLayer(entry) is not { } resolved)
+                continue;
+            var view = entry.State.IsTiled && _layerTileShader is not null ? TileLayer(resolved, entry.State) : resolved;
+
+            if (entry.State is { Blend: LayerBlendMode.Normal, Invert: false, IsMask: false } || _layerBlendShader is null)
                 DrawCompositePass(_accumulatedTarget, _layerOverShader, _overBlend, null, view, entry.State.Opacity, sourceIsColor);
+            else
+                DrawBlendPass(view, entry.State);
         }
+        PruneGenerated();
         DrawCompositePass(_compositeTarget, _straightenShader, null, null, _accumulatedView, 1f, sourceIsColor);
 
         _dirtyRight = _dirtyLeft;
         _dirtyBottom = _dirtyTop;
+    }
+
+    // 生成した内容と描いた内容をまとめて 1 枚にする。何もなければ null
+    private ID3D11ShaderResourceView? ResolveLayer(LayerEntry entry)
+    {
+        var paint = entry.Texture is { HasContent: true, View: { } view } ? view : null;
+        if (GeneratedView(entry.State) is not { } generated || _generatedShader is null)
+            return paint;
+
+        if (_resolved is null)
+        {
+            var device = _gpu.Device;
+            _resolved = device.CreateTexture2D(TextureDescription(Width, Height));
+            _resolvedTarget = device.CreateRenderTargetView(_resolved);
+            _resolvedView = device.CreateShaderResourceView(_resolved);
+        }
+        _generatedTint = TintOf(entry.State);
+        DrawCompositePass(_resolvedTarget!, _generatedShader, null, generated, null, 1f, false);
+        _generatedTint = System.Numerics.Vector3.One;
+        if (paint is not null)
+            DrawCompositePass(_resolvedTarget!, _layerOverShader!, _overBlend, null, paint, 1f, false);
+        return _resolvedView;
+    }
+
+    // 単色のレイヤーは白で生成して、ここで色を付ける
+    private static System.Numerics.Vector3 TintOf(LayerState state) =>
+        state.Noise is { Type: NoiseType.Solid } noise
+            ? new System.Numerics.Vector3(noise.Shape.SolidR, noise.Shape.SolidG, noise.Shape.SolidB)
+            : System.Numerics.Vector3.One;
+
+    private ID3D11ShaderResourceView TileLayer(ID3D11ShaderResourceView layer, LayerState state)
+    {
+        var device = _gpu.Device;
+        if (_tiled is null)
+        {
+            _tiled = device.CreateTexture2D(TextureDescription(Width, Height));
+            _tiledTarget = device.CreateRenderTargetView(_tiled);
+            _tiledView = device.CreateShaderResourceView(_tiled);
+        }
+        var constants = new PaintConstants
+        {
+            CanvasWidth = Width,
+            CanvasHeight = Height,
+            DabX = state.OffsetX,
+            DabY = state.OffsetY,
+            PolarTilingX = state.TilingX,
+            PolarTilingY = state.TilingY,
+        };
+        var context = _gpu.Context;
+        context.UpdateSubresource(constants, _constantBuffer);
+
+        SetCommonState(null, _wrapSampler);
+        context.OMSetRenderTargets(_tiledTarget!);
+        context.RSSetViewport(0, 0, Width, Height);
+        context.VSSetShader(_fullVertexShader);
+        context.PSSetShader(_layerTileShader);
+        context.PSSetShaderResource(1, layer);
+        context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
+        context.Draw(3, 0);
+        ResetState();
+        return _tiledView!;
+    }
+
+    private ID3D11ShaderResourceView? GeneratedView(LayerState state)
+    {
+        if (state.Noise is not { } settings || _noiseShaderOwner is null || Width <= 0 || Height <= 0)
+            return null;
+
+        if (!_generated.TryGetValue(state.Id, out var generated))
+        {
+            generated = new GeneratedLayer(new NoiseGenerator(_gpu, _noiseShaderOwner));
+            _generated[state.Id] = generated;
+        }
+        if (generated.Settings != settings || generated.Width != Width || generated.Height != Height)
+        {
+            generated.Generator.Generate(settings, Width, Height);
+            generated.Settings = settings;
+            generated.Width = Width;
+            generated.Height = Height;
+        }
+        return generated.Generator.ShaderResourceView;
+    }
+
+    // 消したレイヤーの生成結果を捨てる。元に戻したら作り直す
+    private void PruneGenerated()
+    {
+        foreach (int id in _generated.Keys.Where(id => _layers.All(l => l.State.Id != id)).ToArray())
+        {
+            _generated[id].Dispose();
+            _generated.Remove(id);
+        }
+    }
+
+    private void DrawBlendPass(ID3D11ShaderResourceView layer, LayerState state)
+    {
+        var device = _gpu.Device;
+        if (_belowCopy is null)
+        {
+            _belowCopy = device.CreateTexture2D(TextureDescription(Width, Height));
+            _belowCopyView = device.CreateShaderResourceView(_belowCopy);
+        }
+        var context = _gpu.Context;
+        context.CopyResource(_belowCopy, _accumulated!);
+
+        var constants = new PaintConstants
+        {
+            CanvasWidth = Width,
+            CanvasHeight = Height,
+            Flow = state.Opacity,
+            BlendAxis = (uint)state.Blend,
+            LayerInvert = state.Invert ? 1u : 0u,
+            LayerMask = state.IsMask ? 1u : 0u,
+        };
+        context.UpdateSubresource(constants, _constantBuffer);
+
+        SetCommonState(null);
+        context.OMSetRenderTargets(_accumulatedTarget!);
+        context.RSSetViewport(0, 0, Width, Height);
+        context.RSSetState(_scissorRaster);
+        context.RSSetScissorRect(_dirtyLeft, _dirtyTop, _dirtyRight - _dirtyLeft, _dirtyBottom - _dirtyTop);
+        context.VSSetShader(_fullVertexShader);
+        context.PSSetShader(_layerBlendShader);
+        context.PSSetShaderResource(1, layer);
+        context.PSSetShaderResource(2, _belowCopyView!);
+        context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
+        context.Draw(3, 0);
+        ResetState();
+    }
+
+    /// <summary>ベースと各レイヤーの縮小画像を作る。読み戻しは小さいので、操作が落ち着くたびに呼んでよい。</summary>
+    public IReadOnlyList<LayerThumbnail> RenderThumbnails(ID3D11ShaderResourceView source, bool sourceIsColor)
+    {
+        if (_fullVertexShader is null || _thumbnailSourceShader is null || _thumbnailGeneratedShader is null || _thumbnailLayerShader is null)
+            return [];
+
+        if (_thumbnail is null)
+        {
+            var description = new Texture2DDescription
+            {
+                Width = ThumbnailSize,
+                Height = ThumbnailSize,
+                MipLevels = 1,
+                ArraySize = 1,
+                Format = Format.R8G8B8A8_UNorm,
+                SampleDescription = new SampleDescription(1, 0),
+                Usage = ResourceUsage.Default,
+                BindFlags = BindFlags.RenderTarget,
+            };
+            _thumbnail = _gpu.Device.CreateTexture2D(description);
+            _thumbnailTarget = _gpu.Device.CreateRenderTargetView(_thumbnail);
+            description.Usage = ResourceUsage.Staging;
+            description.BindFlags = BindFlags.None;
+            description.CPUAccessFlags = CpuAccessFlags.Read;
+            _thumbnailStaging = _gpu.Device.CreateTexture2D(description);
+        }
+
+        var result = new List<LayerThumbnail>(_layers.Length + 1);
+        BeginThumbnail();
+        DrawThumbnailPass(_thumbnailSourceShader, null, source, null, sourceIsColor, null);
+        result.Add(ReadThumbnail(LayerThumbnail.BaseLayerId));
+
+        foreach (var entry in _layers)
+        {
+            BeginThumbnail();
+            if (GeneratedView(entry.State) is { } generated)
+                DrawThumbnailPass(_thumbnailGeneratedShader, null, generated, null, false, entry.State);
+            if (entry.Texture is { HasContent: true, View: { } view })
+                DrawThumbnailPass(_thumbnailLayerShader, _overBlend, null, view, false, entry.State);
+            var thumbnail = ReadThumbnail(entry.State.Id);
+            if (entry.State.Invert)
+            {
+                // 乗算済みアルファなので、アルファから引く
+                var rgba = thumbnail.Rgba;
+                for (int i = 0; i < rgba.Length; i += 4)
+                {
+                    rgba[i] = (byte)(rgba[i + 3] - rgba[i]);
+                    rgba[i + 1] = (byte)(rgba[i + 3] - rgba[i + 1]);
+                    rgba[i + 2] = (byte)(rgba[i + 3] - rgba[i + 2]);
+                }
+            }
+            result.Add(thumbnail);
+        }
+        return result;
+    }
+
+    private void BeginThumbnail() => _gpu.Context.ClearRenderTargetView(_thumbnailTarget!, new Color4(0, 0, 0, 0));
+
+    private void DrawThumbnailPass(ID3D11PixelShader shader, ID3D11BlendState? blend,
+        ID3D11ShaderResourceView? source, ID3D11ShaderResourceView? layer, bool sourceIsColor, LayerState? state)
+    {
+        var tint = state is null ? System.Numerics.Vector3.One : TintOf(state);
+        var constants = new PaintConstants
+        {
+            CanvasWidth = ThumbnailSize,
+            CanvasHeight = ThumbnailSize,
+            SourceIsColor = sourceIsColor ? 1u : 0u,
+            DabX = state?.OffsetX ?? 0f,
+            DabY = state?.OffsetY ?? 0f,
+            PolarTilingX = state?.TilingX ?? 1f,
+            PolarTilingY = state?.TilingY ?? 1f,
+            ColorR = tint.X,
+            ColorG = tint.Y,
+            ColorB = tint.Z,
+        };
+        var context = _gpu.Context;
+        context.UpdateSubresource(constants, _constantBuffer);
+
+        SetCommonState(blend, _wrapSampler);
+        context.OMSetRenderTargets(_thumbnailTarget!);
+        context.RSSetViewport(0, 0, ThumbnailSize, ThumbnailSize);
+        context.VSSetShader(_fullVertexShader);
+        context.PSSetShader(shader);
+        if (source is not null)
+            context.PSSetShaderResource(0, source);
+        if (layer is not null)
+            context.PSSetShaderResource(1, layer);
+        context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
+        context.Draw(3, 0);
+        ResetState();
+    }
+
+    private LayerThumbnail ReadThumbnail(int id)
+    {
+        var context = _gpu.Context;
+        context.CopyResource(_thumbnailStaging!, _thumbnail!);
+        var rgba = new byte[ThumbnailSize * ThumbnailSize * 4];
+        var mapped = context.Map(_thumbnailStaging!, 0, MapMode.Read);
+        try
+        {
+            for (int y = 0; y < ThumbnailSize; y++)
+                System.Runtime.InteropServices.Marshal.Copy(mapped.DataPointer + (nint)(y * mapped.RowPitch), rgba, y * ThumbnailSize * 4, ThumbnailSize * 4);
+        }
+        finally
+        {
+            context.Unmap(_thumbnailStaging!, 0);
+        }
+        return new LayerThumbnail(id, ThumbnailSize, rgba);
     }
 
     private void DrawCompositePass(ID3D11RenderTargetView target, ID3D11PixelShader shader, ID3D11BlendState? blend,
@@ -973,7 +1253,11 @@ public sealed unsafe class PaintRenderer : IDisposable
             CanvasWidth = Width,
             CanvasHeight = Height,
             Flow = opacity,
-            SourceIsColor = sourceIsColor ? 1u : 0u,
+            SourceIsColor = _transparentBase && shader == _sourceShader ? 2u : sourceIsColor ? 1u : 0u,
+            BlendAxis = shader == _straightenShader ? (uint)_output : 0u,
+            ColorR = _generatedTint.X,
+            ColorG = _generatedTint.Y,
+            ColorB = _generatedTint.Z,
         };
         var context = _gpu.Context;
         context.UpdateSubresource(constants, _constantBuffer);
@@ -1020,6 +1304,39 @@ public sealed unsafe class PaintRenderer : IDisposable
         context.IASetPrimitiveTopology(PrimitiveTopology.TriangleStrip);
         context.Draw(4, 0);
         ResetState();
+    }
+
+    /// <summary>合成結果の明るさを読み戻す (透明は黒)。16bit の書き出し用で、ReadComposite より階調が細かい。</summary>
+    public float[] ReadCompositeLuminance()
+    {
+        if (_composite is null)
+            return [];
+        var description = TextureDescription(Width, Height);
+        description.Usage = ResourceUsage.Staging;
+        description.BindFlags = BindFlags.None;
+        description.CPUAccessFlags = CpuAccessFlags.Read;
+        using var staging = _gpu.Device.CreateTexture2D(description);
+        var context = _gpu.Context;
+        context.CopyResource(staging, _composite);
+        var result = new float[Width * Height];
+        var mapped = context.Map(staging, 0, MapMode.Read);
+        try
+        {
+            for (int y = 0; y < Height; y++)
+            {
+                var row = new ReadOnlySpan<Half>((void*)(mapped.DataPointer + (nint)(y * mapped.RowPitch)), Width * ComponentsPerPixel);
+                for (int x = 0; x < Width; x++)
+                {
+                    int i = x * ComponentsPerPixel;
+                    result[y * Width + x] = (0.299f * (float)row[i] + 0.587f * (float)row[i + 1] + 0.114f * (float)row[i + 2]) * (float)row[i + 3];
+                }
+            }
+        }
+        finally
+        {
+            context.Unmap(staging, 0);
+        }
+        return result;
     }
 
     /// <summary>合成結果を読み戻す (乗算なし)。</summary>
@@ -1125,6 +1442,22 @@ public sealed unsafe class PaintRenderer : IDisposable
         _accumulatedView?.Dispose();
         _accumulatedTarget?.Dispose();
         _accumulated?.Dispose();
+        _tiledView?.Dispose();
+        _tiledTarget?.Dispose();
+        _tiled?.Dispose();
+        _tiledView = null;
+        _tiledTarget = null;
+        _tiled = null;
+        _resolvedView?.Dispose();
+        _resolvedTarget?.Dispose();
+        _resolved?.Dispose();
+        _belowCopyView?.Dispose();
+        _belowCopy?.Dispose();
+        _resolvedView = null;
+        _resolvedTarget = null;
+        _resolved = null;
+        _belowCopyView = null;
+        _belowCopy = null;
         CompositeView = null;
         _compositeTarget = null;
         _composite = null;
@@ -1141,10 +1474,15 @@ public sealed unsafe class PaintRenderer : IDisposable
         _blurShader?.Dispose();
         _polarBrushShader?.Dispose();
         _polarBlurShader?.Dispose();
-        _seamBlendShader?.Dispose();
         _sourceShader?.Dispose();
         _layerOverShader?.Dispose();
         _straightenShader?.Dispose();
+        _layerBlendShader?.Dispose();
+        _generatedShader?.Dispose();
+        _layerTileShader?.Dispose();
+        _thumbnailLayerShader?.Dispose();
+        _thumbnailSourceShader?.Dispose();
+        _thumbnailGeneratedShader?.Dispose();
         _resampleShader?.Dispose();
         _cursorShader?.Dispose();
     }
@@ -1161,6 +1499,12 @@ public sealed unsafe class PaintRenderer : IDisposable
         _textures.Clear();
         ReleaseShadow();
         ReleaseComposite();
+        foreach (var generated in _generated.Values)
+            generated.Dispose();
+        _generated.Clear();
+        _thumbnailTarget?.Dispose();
+        _thumbnail?.Dispose();
+        _thumbnailStaging?.Dispose();
         DisposeShaders();
         _scissorRaster.Dispose();
         _eraseBlend.Dispose();

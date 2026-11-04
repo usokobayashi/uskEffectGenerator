@@ -29,22 +29,12 @@
   <x:String x:Key="S.Top.Export">書き出し</x:String>
   <x:String x:Key="S.Top.Undo">元に戻す</x:String>
   <x:String x:Key="S.Top.Redo">やり直す</x:String>
-  <x:String x:Key="S.Mode.Generate">生成</x:String>
-  <x:String x:Key="S.Mode.Paint">ペイント</x:String>
   <x:String x:Key="S.Common.NotYet">今後の更新で使えるようになります。</x:String>
 
   <!-- 書き出し -->
-  <x:String x:Key="S.Export.Channels">チャンネル</x:String>
-  <x:String x:Key="S.Export.Gray8">グレースケール 8bit</x:String>
-  <x:String x:Key="S.Export.Gray16">グレースケール 16bit（PNG のみ）</x:String>
-  <x:String x:Key="S.Export.RgbaOpaque">RGBA（RGB = 値、A = 255）</x:String>
-  <x:String x:Key="S.Export.RgbaWhiteAlpha">RGBA（RGB = 白、A = 値）</x:String>
-  <x:String x:Key="S.Export.RgbaSource">RGBA（読み込んだ画像のまま）</x:String>
-  <x:String x:Key="S.Export.Run">書き出し...</x:String>
-  <x:String x:Key="S.Export.Title">画像を書き出し</x:String>
-  <x:String x:Key="S.Export.Done">書き出しました: {0}</x:String>
+  <x:String x:Key="S.Export.Title">書き出し</x:String>
+  <x:String x:Key="S.Export.Done">出力しました: {0}</x:String>
   <x:String x:Key="S.Export.Failed">書き出せません</x:String>
-  <x:String x:Key="S.Export.Gray16PngOnly">グレースケール 16bit は PNG でのみ書き出せます。</x:String>
   <x:String x:Key="S.Export.DefaultName">noise</x:String>
   <x:String x:Key="S.FileType.Openable">プロジェクトと画像</x:String>
   <x:String x:Key="S.FileType.Project">uskEffect プロジェクト</x:String>
@@ -80,19 +70,35 @@
   <x:String x:Key="S.Brush.Hardness">硬さ</x:String>
   <x:String x:Key="S.Brush.Opacity">濃さ</x:String>
   <x:String x:Key="S.Brush.Color">色</x:String>
-  <x:String x:Key="S.Paint.ClearMenu">このレイヤーを消去</x:String>
   <x:String x:Key="S.Paint.LayerHidden">表示していないレイヤーには描けません。</x:String>
-  <x:String x:Key="S.Paint.NeedPaintMode">描くには、右上を「ペイント」に切り替えてください。</x:String>
   <x:String x:Key="S.Brush.PressureSize">筆圧で大きさを変える</x:String>
   <x:String x:Key="S.Brush.PressureOpacity">筆圧で濃さを変える</x:String>
-  <x:String x:Key="S.Paint.NotInEffect">エフェクトの表示では描けません。矩形・極座標・シームの表示で描けます。</x:String>
   <x:String x:Key="S.Brush.Wrap">端をつなげて描く</x:String>
 
   <!-- 表示 -->
   <x:String x:Key="S.View.Rect">矩形</x:String>
   <x:String x:Key="S.View.Polar">極座標</x:String>
-  <x:String x:Key="S.View.Seam">シーム</x:String>
-  <x:String x:Key="S.View.Effect">エフェクト</x:String>
+  <x:String x:Key="S.View.Tile">タイリング</x:String>
+  <x:String x:Key="S.Output.Alpha">アルファ</x:String>
+  <x:String x:Key="S.Output.Mask">白黒</x:String>
+  <x:String x:Key="S.Output.AlphaHelp">黒を透明に変換して表示して書き出す。色は保つ（RGBA）</x:String>
+  <x:String x:Key="S.Output.MaskHelp">明るさだけを表示して書き出す。透明は黒（グレースケール）</x:String>
+  <x:String x:Key="S.Export.Confirm">出力</x:String>
+  <x:String x:Key="S.Export.Output">形式</x:String>
+  <x:String x:Key="S.Export.Tint">色を乗せる</x:String>
+  <x:String x:Key="S.Export.TintNone">なし</x:String>
+  <x:String x:Key="S.Export.Name">名前</x:String>
+  <x:String x:Key="S.Export.Format">種類</x:String>
+  <x:String x:Key="S.Export.Folder">出力先</x:String>
+  <x:String x:Key="S.Export.Browse">参照...</x:String>
+  <x:String x:Key="S.Export.AllowOverwrite">上書きを許可</x:String>
+  <x:String x:Key="S.Export.OverwriteTitle">上書きの確認</x:String>
+  <x:String x:Key="S.Export.OverwriteBody">同じ名前のファイルがあります。上書きしますか？&#10;{0}</x:String>
+  <x:String x:Key="S.Export.Overwrite">上書き</x:String>
+  <x:String x:Key="S.Export.BadName">名前に使えない文字があります。</x:String>
+  <x:String x:Key="S.Brush.Settings">ブラシ設定</x:String>
+  <x:String x:Key="S.Export.Bit16">16bit（PNG のみ）</x:String>
+  <x:String x:Key="S.Shape.Color">色</x:String>
   <x:String x:Key="S.Polar.Summary">内外径 {0:0.00}–{1:0.00}</x:String>
   <x:String x:Key="S.Polar.Inner">内径</x:String>
   <x:String x:Key="S.Polar.Outer">外径</x:String>
@@ -101,17 +107,8 @@
   <x:String x:Key="S.Polar.FlipRadial">内外を反転</x:String>
 
   <!-- タブ -->
-  <x:String x:Key="S.Tab.Noise">ノイズ</x:String>
-  <x:String x:Key="S.Tab.Seam">シーム</x:String>
-  <x:String x:Key="S.Tab.Effect">エフェクト</x:String>
-  <x:String x:Key="S.Tab.Layer">レイヤー</x:String>
 
   <!-- 元画像 -->
-  <x:String x:Key="S.Source.Label">元画像</x:String>
-  <x:String x:Key="S.Source.Noise">ノイズ</x:String>
-  <x:String x:Key="S.Source.Image">画像</x:String>
-  <x:String x:Key="S.Source.None">「開く」で画像を読み込めます</x:String>
-  <x:String x:Key="S.Source.Info">{0}（{1}×{2}）</x:String>
   <x:String x:Key="S.Source.LoadFailed">画像を読み込めません</x:String>
   <x:String x:Key="S.FileType.Images">画像（PNG・TGA・JPG・BMP）</x:String>
 
@@ -125,6 +122,32 @@
 
   <!-- ノイズ -->
   <x:String x:Key="S.Noise.Type">種類</x:String>
+  <x:String x:Key="S.Generator.Noise">ノイズ</x:String>
+  <x:String x:Key="S.Generator.Gradient">グラデーション</x:String>
+  <x:String x:Key="S.Generator.Shape">シェイプ</x:String>
+  <x:String x:Key="S.Generator.Radial">放射</x:String>
+  <x:String x:Key="S.Generator.Curve">曲線</x:String>
+  <x:String x:Key="S.Shape.Header">形の設定</x:String>
+  <x:String x:Key="S.Shape.Center">中心</x:String>
+  <x:String x:Key="S.Shape.Angle">角度</x:String>
+  <x:String x:Key="S.Shape.Size">大きさ</x:String>
+  <x:String x:Key="S.Shape.Thickness">太さ</x:String>
+  <x:String x:Key="S.Shape.Softness">ぼかし</x:String>
+  <x:String x:Key="S.Shape.Count">数</x:String>
+  <x:String x:Key="S.Shape.Falloff">減衰</x:String>
+  <x:String x:Key="S.Shape.Aspect">縦横比</x:String>
+  <x:String x:Key="S.Shape.Twist">ねじれ</x:String>
+  <x:String x:Key="S.Shape.ArcLength">弧の長さ</x:String>
+  <x:String x:Key="S.Shape.StarInner">内側の比率</x:String>
+  <x:String x:Key="S.Shape.StripeWidth">帯の幅</x:String>
+  <x:String x:Key="S.Shape.Amplitude">振幅</x:String>
+  <x:String x:Key="S.Shape.Stop0">段 1</x:String>
+  <x:String x:Key="S.Shape.Stop1">段 2</x:String>
+  <x:String x:Key="S.Shape.Stop2">段 3</x:String>
+  <x:String x:Key="S.Shape.Stop3">段 4</x:String>
+  <x:String x:Key="S.Shape.P0">始点</x:String>
+  <x:String x:Key="S.Shape.P1">制御点</x:String>
+  <x:String x:Key="S.Shape.P2">終点</x:String>
   <x:String x:Key="S.Noise.Fractal">合成</x:String>
   <x:String x:Key="S.Noise.Worley">Worley</x:String>
   <x:String x:Key="S.Noise.StripeDirection">帯の向き</x:String>
@@ -150,75 +173,38 @@
   <x:String x:Key="S.Noise.Invert">反転</x:String>
 
   <!-- シーム -->
-  <x:String x:Key="S.Seam.Analyzing">解析中...</x:String>
-  <x:String x:Key="S.Seam.None">継ぎ目なし</x:String>
-  <x:String x:Key="S.Seam.Found">継ぎ目あり</x:String>
-  <x:String x:Key="S.Seam.Updating">（更新中）</x:String>
-  <x:String x:Key="S.Seam.Detail">左右 値 {0:0.00}×  勾配 {1:0.00}×&#10;上下 値 {2:0.00}×  勾配 {3:0.00}×&#10;基準 値 &lt; {4:0.0}×  勾配 &lt; {5:0.0}×</x:String>
-  <x:String x:Key="S.Seam.Overlay">重ね表示</x:String>
-  <x:String x:Key="S.Seam.OverlayOff">なし</x:String>
-  <x:String x:Key="S.Seam.OverlayValue">値の差分</x:String>
-  <x:String x:Key="S.Seam.OverlayGradient">勾配の差分</x:String>
-  <x:String x:Key="S.Seam.Threshold">しきい値</x:String>
-  <x:String x:Key="S.Seam.Fix">シーム修正</x:String>
-  <x:String x:Key="S.Seam.FixOffset">オフセット表示で手直し</x:String>
-  <x:String x:Key="S.Seam.ManualHint">継ぎ目を中央に寄せました。ブラシやぼかしでなぞると手直しできます。</x:String>
-  <x:String x:Key="S.Seam.FixBlend">自動ブレンド...</x:String>
-  <x:String x:Key="S.Seam.BlendAxis">向き</x:String>
-  <x:String x:Key="S.Seam.BlendAxisX">左右</x:String>
-  <x:String x:Key="S.Seam.BlendAxisY">上下</x:String>
-  <x:String x:Key="S.Seam.BlendAxisBoth">両方</x:String>
-  <x:String x:Key="S.Seam.BlendWidth">幅</x:String>
-  <x:String x:Key="S.Seam.BlendStrength">強度</x:String>
-  <x:String x:Key="S.Seam.BlendApply">適用</x:String>
-  <x:String x:Key="S.Seam.BlendCancel">取り消し</x:String>
 
-  <!-- エフェクト -->
-  <x:String x:Key="S.Effect.Blend">合成</x:String>
-  <x:String x:Key="S.Effect.Mapping">貼り方</x:String>
-  <x:String x:Key="S.Effect.MappingRect">矩形</x:String>
-  <x:String x:Key="S.Effect.MappingPolar">極座標</x:String>
-  <x:String x:Key="S.Effect.Background">背景</x:String>
-  <x:String x:Key="S.Effect.BgChecker">市松</x:String>
-  <x:String x:Key="S.Effect.BgBlack">黒</x:String>
-  <x:String x:Key="S.Effect.BgGray">灰</x:String>
-  <x:String x:Key="S.Effect.SoftMask">円形ソフトマスク（矩形のみ）</x:String>
-  <x:String x:Key="S.Effect.TextureAsAlpha">テクスチャの値をアルファに使う</x:String>
-  <x:String x:Key="S.Effect.Motion">動き</x:String>
-  <x:String x:Key="S.Effect.Scroll">UV 移動 /s</x:String>
-  <x:String x:Key="S.Effect.ScrollX">U</x:String>
-  <x:String x:Key="S.Effect.ScrollY">V</x:String>
-  <x:String x:Key="S.Effect.Rotation">回転</x:String>
-  <x:String x:Key="S.Effect.Scale">拡縮</x:String>
-  <x:String x:Key="S.Effect.Look">見た目</x:String>
-  <x:String x:Key="S.Effect.Alpha">アルファ</x:String>
-  <x:String x:Key="S.Effect.Color">色</x:String>
-  <x:String x:Key="S.Effect.Dissolve">ディゾルブ</x:String>
-  <x:String x:Key="S.Effect.EdgeWidth">ディゾルブ境界</x:String>
-  <x:String x:Key="S.Effect.EdgeColor">発光色</x:String>
-  <x:String x:Key="S.Effect.Start">開始</x:String>
-  <x:String x:Key="S.Effect.End">終了</x:String>
 
   <x:String x:Key="S.Color.Hex">色の 16 進値</x:String>
 
   <!-- レイヤー -->
-  <x:String x:Key="S.Layer.Source">元の画像（ノイズ・読み込み）</x:String>
   <x:String x:Key="S.Layer.ToggleVisible">レイヤーの表示切替</x:String>
   <x:String x:Key="S.Layer.Add">追加</x:String>
   <x:String x:Key="S.Layer.Delete">削除</x:String>
   <x:String x:Key="S.Layer.MoveUp">上へ</x:String>
   <x:String x:Key="S.Layer.MoveDown">下へ</x:String>
   <x:String x:Key="S.Layer.Opacity">不透明度</x:String>
+  <x:String x:Key="S.Layer.Effect">効果</x:String>
+  <x:String x:Key="S.Layer.BlendNormal">通常</x:String>
+  <x:String x:Key="S.Layer.BlendMultiply">乗算</x:String>
+  <x:String x:Key="S.Layer.BlendAdd">加算</x:String>
+  <x:String x:Key="S.Layer.BlendSubtract">減算</x:String>
+  <x:String x:Key="S.Layer.BlendScreen">スクリーン</x:String>
+  <x:String x:Key="S.Layer.BlendOverlay">オーバーレイ</x:String>
+  <x:String x:Key="S.Noise.Target">編集中: {0}</x:String>
+  <x:String x:Key="S.Layer.AddNoise">ノイズ</x:String>
+  <x:String x:Key="S.Layer.AddPaint">ペイント</x:String>
+  <x:String x:Key="S.Layer.AddImage">画像</x:String>
+  <x:String x:Key="S.Layer.Invert">色を反転</x:String>
+  <x:String x:Key="S.Layer.Mask">マスクにする（白い部分が下のレイヤーから消える）</x:String>
+  <x:String x:Key="S.Layer.FirstNoiseName">ノイズ 1</x:String>
+  <x:String x:Key="S.Noise.GenerateTexture">テクスチャ生成</x:String>
+  <x:String x:Key="S.Paint.NoiseLayer">ノイズのレイヤーには描けません。ペイントのレイヤーを選んでください。</x:String>
+  <x:String x:Key="S.Brush.InvertColor">色を反転</x:String>
+  <x:String x:Key="S.Layer.Open">レイヤーを開く</x:String>
+  <x:String x:Key="S.Layer.Current">レイヤー: {0}</x:String>
 
   <!-- タイムライン -->
-  <x:String x:Key="S.Timeline.Play">再生</x:String>
-  <x:String x:Key="S.Timeline.Pause">一時停止</x:String>
-  <x:String x:Key="S.Timeline.Stop">停止</x:String>
-  <x:String x:Key="S.Timeline.Position">再生位置</x:String>
-  <x:String x:Key="S.Timeline.Loop">ループ</x:String>
-  <x:String x:Key="S.Timeline.Duration">長さ</x:String>
-  <x:String x:Key="S.Timeline.DurationAria">長さ（秒）</x:String>
-  <x:String x:Key="S.Timeline.Time">{0:0.00} / {1:0.00} s</x:String>
 
   <!-- ステータス -->
   <x:String x:Key="S.Status.Starting">GPU 初期化中...</x:String>

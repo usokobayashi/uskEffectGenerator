@@ -9,6 +9,7 @@ public sealed unsafe class NoiseGenerator : IDisposable
     private const int ThreadGroupSize = 8;
 
     private readonly GpuDevice _gpu;
+    private readonly NoiseGenerator? _shaderOwner;
     private readonly ID3D11Buffer _constantBuffer;
     private ID3D11ComputeShader? _shader;
     private ID3D11Texture2D? _texture;
@@ -18,9 +19,11 @@ public sealed unsafe class NoiseGenerator : IDisposable
     public int Width { get; private set; }
     public int Height { get; private set; }
 
-    public NoiseGenerator(GpuDevice gpu)
+    /// <param name="shaderOwner">シェーダーを借りる生成器。コンパイルは時間がかかるので、レイヤーごとにしない。</param>
+    public NoiseGenerator(GpuDevice gpu, NoiseGenerator? shaderOwner = null)
     {
         _gpu = gpu;
+        _shaderOwner = shaderOwner;
         _constantBuffer = gpu.Device.CreateBuffer(new BufferDescription(
             (uint)System.Runtime.CompilerServices.Unsafe.SizeOf<NoiseConstants>(), BindFlags.ConstantBuffer));
     }
@@ -37,25 +40,32 @@ public sealed unsafe class NoiseGenerator : IDisposable
         return null;
     }
 
-    public void Generate(NoiseSettings settings)
+    public void Generate(NoiseSettings settings) => Generate(settings, settings.Resolution, settings.Resolution);
+
+    /// <summary>大きさを指定して生成する。レイヤーの生成はベースの大きさに合わせる。</summary>
+    public void Generate(NoiseSettings settings, int width, int height)
     {
-        if (_shader is null)
+        var shader = _shaderOwner?._shader ?? _shader;
+        if (shader is null)
             return;
 
-        EnsureTexture(settings.Resolution, settings.Resolution);
+        EnsureTexture(width, height);
 
+        var shape = settings.Shape;
+        // 帯は重ねない。画面にも重ねる設定は出さない
+        bool stripe = settings.Type == NoiseType.Stripe;
         var constants = new NoiseConstants
         {
             Width = (uint)Width,
             Height = (uint)Height,
             Seed = settings.Seed,
-            Octaves = (uint)Math.Clamp(settings.Octaves, 1, 8),
+            Octaves = stripe ? 1u : (uint)Math.Clamp(settings.Octaves, 1, 8),
             Frequency = Math.Max(1, settings.Frequency),
             Persistence = settings.Persistence,
             SeamMode = (uint)settings.Seam,
             NoiseType = (uint)settings.Type,
             Lacunarity = Math.Clamp(settings.Lacunarity, 1, 8),
-            FractalMode = (uint)settings.Fractal,
+            FractalMode = stripe ? (uint)FractalMode.Fbm : (uint)settings.Fractal,
             WorleyMode = (uint)settings.Worley,
             WarpStrength = Math.Max(0f, settings.WarpStrength),
             Contrast = settings.Contrast,
@@ -64,11 +74,32 @@ public sealed unsafe class NoiseGenerator : IDisposable
             StripeDirection = (uint)settings.StripeDirection,
             StripeWidth = settings.StripeWidth,
             StripeSoftness = settings.StripeSoftness,
+            ShapeCenterX = shape.CenterX,
+            ShapeCenterY = shape.CenterY,
+            ShapeAngle = shape.AngleDegrees * MathF.PI / 180f,
+            ShapeSize = Math.Max(shape.Size, 1e-3f),
+            ShapeThickness = Math.Max(shape.Thickness, 0f),
+            ShapeSoftness = Math.Max(shape.Softness, 1e-3f),
+            ShapeFalloff = Math.Max(shape.Falloff, 0.01f),
+            ShapeAmount = shape.Amount,
+            ShapeAspect = Math.Max(shape.Aspect, 0.01f),
+            ShapeTwist = shape.Twist,
+            ShapeCount = (uint)Math.Max(shape.Count, 1),
+            ShapeStop0 = shape.Stop0,
+            ShapeStop1 = shape.Stop1,
+            ShapeStop2 = shape.Stop2,
+            ShapeStop3 = shape.Stop3,
+            ShapeP0X = shape.P0X,
+            ShapeP0Y = shape.P0Y,
+            ShapeP1X = shape.P1X,
+            ShapeP1Y = shape.P1Y,
+            ShapeP2X = shape.P2X,
+            ShapeP2Y = shape.P2Y,
         };
 
         var context = _gpu.Context;
         context.UpdateSubresource(constants, _constantBuffer);
-        context.CSSetShader(_shader);
+        context.CSSetShader(shader);
         context.CSSetConstantBuffer(0, _constantBuffer);
         context.CSSetUnorderedAccessView(0, _uav);
         context.Dispatch(

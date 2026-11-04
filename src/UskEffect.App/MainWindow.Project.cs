@@ -1,11 +1,14 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using UskEffect.App.Controls;
 using UskEffect.App.Locale;
 using UskEffect.Core.Export;
 using UskEffect.Core.Imaging;
+using UskEffect.App.Views;
 using UskEffect.Core.Project;
 using UskEffect.Graphics;
+using UskEffect.Graphics.Painting;
 
 namespace UskEffect.App;
 
@@ -17,8 +20,10 @@ public partial class MainWindow
     private static FilePickerFileType TgaFileType => new(Loc.T("S.FileType.Tga")) { Patterns = ["*.tga"] };
 
     private string? _projectPath;
-    private ImageData? _image;
-    private string? _imageName;
+    private ExportSettings _exportSettings = new();
+    private ExportWindow? _exportWindow;
+    private bool _exportWindowOpen;
+    private Avalonia.Threading.DispatcherTimer? _bannerTimer;
     private bool _dirty;
     private bool _closeConfirmed;
     private bool _closePromptOpen;
@@ -33,16 +38,12 @@ public partial class MainWindow
         Top.SaveMenuItem.Click += async (_, _) => await SaveProjectAsync(saveAs: false);
         Top.SaveButton.Click += async (_, _) => await SaveProjectAsync(saveAs: false);
         Top.SaveAsMenuItem.Click += async (_, _) => await SaveProjectAsync(saveAs: true);
-        Top.ExportMenuItem.Click += async (_, _) => await ExportImageAsync();
-        Top.ExportRunButton.Click += async (_, _) =>
-        {
-            Top.ExportButton.Flyout?.Hide();
-            await ExportImageAsync();
-        };
+        Top.ExportMenuItem.Click += async (_, _) => await ShowExportWindowAsync();
+        Top.ExportButton.Click += async (_, _) => await ShowExportWindowAsync();
+        ExportBanner.PointerPressed += (_, _) => ExportBanner.IsVisible = false;
         Top.ExitMenuItem.Click += (_, _) => Close();
         Top.AboutMenuItem.Click += async (_, _) =>
             await Dialogs.ShowMessageAsync(this, Loc.T("S.App.Name"), Loc.T("S.About.Body"));
-        Top.ExportChannelsBox.SelectionChanged += (_, _) => MarkDirty();
 
         Closing += async (_, e) =>
         {
@@ -131,7 +132,7 @@ public partial class MainWindow
         await OpenFileAsync(path);
     }
 
-    /// <summary>プロジェクトは今の内容と置き換え、画像は今のプロジェクトの元画像にする。</summary>
+    /// <summary>プロジェクトは今の内容と置き換え、画像は今のプロジェクトのレイヤーにする。</summary>
     internal async Task OpenFileAsync(string path)
     {
         if (ProjectFile.IsProjectPath(path))
@@ -145,15 +146,37 @@ public partial class MainWindow
         await LoadImageFileAsync(path);
     }
 
+    private async Task PickImageLayerAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = Loc.T("S.Project.OpenTitle"),
+            AllowMultiple = false,
+            FileTypeFilter = [ImageFileType],
+        });
+        if (files.Count > 0 && files[0].TryGetLocalPath() is { } path)
+            await LoadImageFileAsync(path);
+    }
+
+    // 画像をレイヤーとして追加する。始めたばかりならキャンバスを画像に合わせ、そうでなければ縦横比を保って収める
     private async Task LoadImageFileAsync(string path)
     {
+        if (_engine is null)
+            return;
         try
         {
             // 大きな画像でも画面を止めない
             var image = await Task.Run(() => ImageLoader.Load(path));
-            SetImage(image, Path.GetFileName(path));
-            NoiseTab.UseImage = true;
-            MarkDirty();
+            if ((_engine.IsPristine || _engine.Layers is [{ Noise: not null }]) && NoiseTab.CustomSize is null)
+                FitCanvasTo(image);
+
+            // 白黒のままだと画像の色が見えない
+            if (Strip.Output == CompositeOutput.Mask)
+                Strip.Output = CompositeOutput.BlackToAlpha;
+
+            var (width, height) = NoiseTab.CustomSize ?? (NoiseTab.Resolution, NoiseTab.Resolution);
+            var fitted = await Task.Run(() => image.FitInto(width, height));
+            ChangeLayers(() => _engine.AddImageLayer(fitted, Path.GetFileName(path)));
         }
         catch (ImageLoadException ex)
         {
@@ -161,18 +184,13 @@ public partial class MainWindow
         }
     }
 
-    private void SetImage(ImageData? image, string? name)
+    private void FitCanvasTo(ImageData image)
     {
-        _image = image;
-        _imageName = name;
-        NoiseTab.SetImageInfo(image is null ? null : Loc.F("S.Source.Info", name, image.Width, image.Height));
-    }
-
-    // 元画像の切り替えをエンジンへ伝える
-    private void ApplySource()
-    {
-        _engine?.SetImageSource(NoiseTab.UseImage ? _image : null);
-        MarkDirty();
+        if (image.Width == image.Height && image.Width is 256 or 512 or 1024 or 2048)
+            NoiseTab.Resolution = image.Width;
+        else
+            NoiseTab.SetCustomSize(image.Width, image.Height);
+        ApplySettings();
     }
 
     private async Task NewProjectAsync()
@@ -180,7 +198,8 @@ public partial class MainWindow
         if (!await ConfirmDiscardOrSaveAsync())
             return;
 
-        ApplyDocument(new ProjectDocument());
+        ApplyDocument(new ProjectDocument { NoiseIsLayer = true });
+        ShowStartTypeMenu();
         _projectPath = null;
         _dirty = false;
         UpdateTitle();
@@ -241,94 +260,214 @@ public partial class MainWindow
         return true;
     }
 
-    private async Task ExportImageAsync()
+    private async Task ShowExportWindowAsync()
     {
-        if (_engine is null)
+        if (_engine is null || _exportWindowOpen)
             return;
 
-        var channels = (ExportChannels)Math.Max(0, Top.ExportChannelsBox.SelectedIndex);
-        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        var before = (Settings: CurrentExportSettings(), NoiseTab.Resolution, NoiseTab.CustomSize);
+        var folder = before.Settings.Folder;
+        if (string.IsNullOrWhiteSpace(folder))
+            folder = (await StorageProvider.TryGetWellKnownFolderAsync(WellKnownFolder.Downloads))?.TryGetLocalPath()
+                ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+        string name = string.IsNullOrWhiteSpace(before.Settings.Name)
+            ? Path.GetFileNameWithoutExtension(_projectPath) ?? Loc.T("S.Export.DefaultName")
+            : before.Settings.Name;
+
+        var window = new ExportWindow(
+            new ExportChoice(before.Settings with { Folder = folder, Name = name }, before.Resolution, before.CustomSize),
+            RenderExportPreview, choice => RunExportAsync(choice, path => Dialogs.AskOverwriteAsync(_exportWindow!, path)));
+
+        // 慣れた人が同じ位置をもう一度押すだけで出力できるよう、出力ボタンを書き出しボタンに重ねる
+        var button = Top.ExportButton;
+        var center = button.PointToScreen(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2));
+        window.Position = ExportWindow.PositionFor(center, RenderScaling);
+
+        _exportWindow = window;
+        _exportWindowOpen = true;
+        try
         {
-            Title = Loc.T("S.Export.Title"),
-            SuggestedFileName = Path.GetFileNameWithoutExtension(_projectPath) ?? Loc.T("S.Export.DefaultName"),
-            DefaultExtension = "png",
-            // 16bit は PNG だけなので TGA を候補に出さない
-            FileTypeChoices = channels == ExportChannels.Gray16 ? [PngFileType] : [PngFileType, TgaFileType],
-            ShowOverwritePrompt = true,
-        });
-        string? path = file?.TryGetLocalPath();
-        if (path is null)
-            return;
+            await window.ShowDialog(this);
+        }
+        finally
+        {
+            _exportWindowOpen = false;
+            _exportWindow = null;
+        }
+
+        // 取り消したら、プレビューのために変えたものを戻す
+        if (!window.Confirmed)
+            ApplyExportChoice(new ExportChoice(before.Settings, before.Resolution, before.CustomSize));
+    }
+
+    private ExportSettings CurrentExportSettings() => _exportSettings with { Output = Strip.Output };
+
+    private void ApplyExportChoice(ExportChoice choice)
+    {
+        _exportSettings = choice.Settings;
+        if (choice.Settings.Output is { } output)
+            Strip.Output = output;
+        if (choice.CustomSize is { } size)
+            NoiseTab.SetCustomSize(size.Width, size.Height);
+        else
+            NoiseTab.Resolution = choice.Resolution;
+        ApplySettings();
+    }
+
+    /// <summary>書き出す画像を作る。プレビューと書き出しで同じ結果にする。</summary>
+    internal ImageData? RenderExportPreview(ExportChoice choice)
+    {
+        ApplyExportChoice(choice);
+        if (_engine?.ReadComposite() is not { } image)
+            return null;
+        var s = choice.Settings;
+        return s.Output == CompositeOutput.Mask ? image : TextureExporter.ApplyTint(image, s.Tint, s.TintR, s.TintG, s.TintB);
+    }
+
+    /// <summary>出力する。やめたときや失敗したときは false で、ウィンドウは閉じない。</summary>
+    internal async Task<bool> RunExportAsync(ExportChoice choice, Func<string, Task<bool>> askOverwrite)
+    {
+        if (_engine is null)
+            return false;
+        var s = choice.Settings;
+        string name = s.Name ?? "";
+        string extension = s.Format == ImageFileFormat.Tga ? ".tga" : ".png";
+        // 拡張子まで書かれていても二重にしない
+        if (name.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
+            name = name[..^extension.Length];
 
         try
         {
-            var format = TextureExporter.FormatFromPath(path);
-            if (!TextureExporter.IsSupported(format, channels))
-                throw new NotSupportedException(Loc.T("S.Export.Gray16PngOnly"));
+            if (name.Length == 0 || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+                throw new IOException(Loc.T("S.Export.BadName"));
 
-            if (_engine.ReadComposite() is { } painted)
-            {
-                TextureExporter.SaveImage(path, painted, channels);
-            }
-            else if (NoiseTab.UseImage && _image is { } image)
-            {
-                TextureExporter.SaveImage(path, image, channels);
-            }
+            string path = Path.Combine(s.Folder ?? "", name + extension);
+            if (File.Exists(path) && !s.AllowOverwrite && !await askOverwrite(path))
+                return false;
+
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            var image = RenderExportPreview(choice);
+            if (image is null)
+                throw new InvalidOperationException(Loc.T("S.Export.Failed"));
+
+            if (s.Output == CompositeOutput.Mask && s.Bit16)
+                TextureExporter.Save(path, _engine.ReadCompositeLuminance(), image.Width, image.Height, ExportChannels.Gray16);
             else
-            {
-                var (pixels, width, height) = _engine.ReadNoisePixels();
-                TextureExporter.Save(path, pixels, width, height, channels);
-            }
-            Status.ShowMessage(Loc.F("S.Export.Done", path));
+                TextureExporter.SaveImage(path, image, s.Output == CompositeOutput.Mask ? ExportChannels.Gray8 : ExportChannels.RgbaSource);
+
+            MarkDirty();
+            ShowExportBanner(path);
+            return true;
         }
-        catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException or IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException or IOException or UnauthorizedAccessException or ArgumentException)
         {
-            await Dialogs.ShowMessageAsync(this, Loc.T("S.Export.Failed"), ex.Message);
+            await Dialogs.ShowMessageAsync((Window?)_exportWindow ?? this, Loc.T("S.Export.Failed"), ex.Message);
+            return false;
         }
+    }
+
+    private void ShowExportBanner(string path)
+    {
+        ExportBannerText.Text = Loc.F("S.Export.Done", path);
+        ToolTip.SetTip(ExportBanner, path);
+        ExportBanner.IsVisible = true;
+        _bannerTimer?.Stop();
+        _bannerTimer = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
+        _bannerTimer.Tick += (_, _) =>
+        {
+            _bannerTimer?.Stop();
+            ExportBanner.IsVisible = false;
+        };
+        _bannerTimer.Start();
     }
 
     internal ProjectDocument BuildDocument() => new()
     {
-        Noise = NoiseTab.Read(),
+        Noise = _canvasNoise with { Resolution = NoiseTab.Resolution },
+        NoiseIsLayer = true,
         Preview = ReadPreviewSettings(),
-        Effect = EffectTab.Read(),
-        Timeline = Timeline.Read(),
-        Export = new ExportSettings { Channels = (ExportChannels)Math.Max(0, Top.ExportChannelsBox.SelectedIndex) },
-        Source = new SourceSettings { Kind = NoiseTab.UseImage ? SourceKind.Image : SourceKind.Noise, ImageName = _imageName },
-        Image = _image,
+        Export = CurrentExportSettings(),
+        CanvasWidth = NoiseTab.CustomSize?.Width,
+        CanvasHeight = NoiseTab.CustomSize?.Height,
         Layers = _engine?.ReadLayers(),
     };
+
+    // 反転はレイヤーの設定へ移した。古いプロジェクトは、ノイズと読み込んだ画像を一番下のレイヤーにする
+    private IReadOnlyList<LayerData>? LayersForEditor(ProjectDocument document)
+    {
+        var layers = (document.Layers ?? [])
+            .Select(l => l.Noise is { Invert: true } ? l with { Invert = !l.Invert, Noise = l.Noise with { Invert = false } } : l)
+            .ToList();
+        bool usesImage = document.Source.Kind == SourceKind.Image && document.Image is not null;
+        if (!document.NoiseIsLayer && document.Image is { } image)
+        {
+            // 使っていなかった画像も捨てず、隠して残す
+            layers.Insert(0, new LayerData { Name = document.Source.ImageName ?? Loc.T("S.Layer.AddImage"), Image = image, Visible = usesImage });
+        }
+        if (!document.NoiseIsLayer && !usesImage)
+        {
+            layers.Insert(0, new LayerData
+            {
+                Name = Loc.T("S.Layer.FirstNoiseName"),
+                Noise = document.Noise with { Invert = false },
+                Invert = document.Noise.Invert,
+            });
+        }
+        // 古いプロジェクトの Tiling は表示の設定だった。今はレイヤーが持つ
+        if (!document.NoiseIsLayer)
+        {
+            bool oldTile = document.Preview.Mode == PreviewMode.Tile3x3;
+            float tilingX = oldTile ? 3 : document.Preview.TilingX, tilingY = oldTile ? 3 : document.Preview.TilingY;
+            layers = layers.Select(l => l with { TilingX = tilingX, TilingY = tilingY, OffsetX = document.Preview.OffsetX, OffsetY = document.Preview.OffsetY }).ToList();
+        }
+        return layers.Count > 0 ? layers : null;
+    }
+
+    // 古いプロジェクトの書き出し設定を、今のプレビューと書き出しの形へ直す
+    private static (CompositeOutput Output, bool Bit16) ReadExport(ExportSettings export)
+    {
+        // カラーは廃止した。残るのはアルファと白黒
+        if (export.Output is { } output)
+            return (output == CompositeOutput.Color ? CompositeOutput.BlackToAlpha : output, export.Bit16);
+        if (export.Transparent)
+            return (CompositeOutput.BlackToAlpha, false);
+        return export.Channels switch
+        {
+            ExportChannels.Gray16 => (CompositeOutput.Mask, true),
+            ExportChannels.RgbaWhiteAlpha or ExportChannels.RgbaBlackToAlpha => (CompositeOutput.BlackToAlpha, false),
+            ExportChannels.RgbaOpaque or ExportChannels.RgbaSource => (CompositeOutput.BlackToAlpha, false),
+            _ => (CompositeOutput.Mask, false),
+        };
+    }
 
     internal void ApplyDocument(ProjectDocument document)
     {
         _suppressApply = true;
         try
         {
-            NoiseTab.Write(document.Noise);
-            // 古いプロジェクトの 3×3 表示は Tiling 3×3 の矩形にする
-            bool oldTile = document.Preview.Mode == PreviewMode.Tile3x3;
-            Strip.Mode = oldTile ? PreviewMode.Rect : document.Preview.Mode;
-            NoiseTab.WriteTexture(oldTile ? 3 : document.Preview.TilingX, oldTile ? 3 : document.Preview.TilingY,
-                document.Preview.OffsetX, document.Preview.OffsetY);
-            SetImage(document.Image, document.Source.ImageName);
-            NoiseTab.UseImage = document.Source.Kind == SourceKind.Image && document.Image is not null;
+            _shownNoiseTarget = -1;
+            _canvasNoise = document.Noise;
+            NoiseTab.Resolution = document.Noise.Resolution;
+            // 古いプロジェクトは、読み込んだ画像がキャンバスの大きさを決めていた
+            if (!document.NoiseIsLayer && document.Source.Kind == SourceKind.Image && document.Image is { } oldImage)
+                NoiseTab.SetCustomSize(oldImage.Width, oldImage.Height);
+            else if (document is { CanvasWidth: { } canvasWidth, CanvasHeight: { } canvasHeight })
+                NoiseTab.SetCustomSize(canvasWidth, canvasHeight);
+            Strip.Mode = document.Preview.Mode;
             Strip.Polar = document.Preview.Polar;
-            SeamTab.Heatmap = document.Preview.Heatmap;
-            SeamTab.Threshold = document.Preview.HeatThreshold;
-            EffectTab.Write(document.Effect, document.Preview.ScrollSpeedU, document.Preview.ScrollSpeedV);
-            Timeline.Write(document.Timeline);
-            Top.ExportChannelsBox.SelectedIndex = (int)document.Export.Channels;
+            var (output, bit16) = ReadExport(document.Export);
+            Strip.Output = output;
+            _exportSettings = document.Export with { Output = output, Bit16 = bit16 };
         }
         finally
         {
             _suppressApply = false;
         }
 
-        _engine?.Timeline.Stop();
         if (_engine is not null)
             _engine.View = new CanvasView();
-        _engine?.SetLayers(document.Layers);
-        ApplySource();
+        _engine?.CanvasSize = NoiseTab.CustomSize is { } size ? new CanvasPixelSize(size.Width, size.Height) : null;
+        _engine?.SetLayers(LayersForEditor(document));
         ApplySettings();
         RefreshLayers();
     }

@@ -7,8 +7,6 @@ using UskEffect.App.Controls;
 using UskEffect.App.Controls.Ui;
 using UskEffect.App.Locale;
 using UskEffect.Graphics;
-using UskEffect.Graphics.Analysis;
-using UskEffect.Graphics.Effects;
 
 namespace UskEffect.App;
 
@@ -22,6 +20,14 @@ public partial class MainWindow : Window
     private Thread? _renderThread;
     private RenderStats _lastStats;
     private int _shownRecoveries;
+
+    // 解像度を持つ。ノイズの中身は各レイヤーが持つ
+    private NoiseSettings _canvasNoise = new();
+    private int _shownNoiseTarget = -1;
+    private IReadOnlyList<UskEffect.Graphics.Painting.LayerThumbnail>? _shownThumbnails;
+
+    // レイヤーは左のバーのアイコンの隣に開く
+    internal UskEffect.App.Views.LayerPanel LayerTab => Rail.LayerPopup;
     private bool _suppressApply;
     private volatile bool _closed;
 
@@ -50,23 +56,16 @@ public partial class MainWindow : Window
         // キャンバス (子 HWND) のクリックは Avalonia を通らないので、ここで数値入力を終える
         Viewport.HostPointerDown += (_, _, _) => TextEditDismiss.EndActive();
 
-        NoiseTab.Changed += ApplySettings;
-        NoiseTab.TextureChanged += ApplySettings;
-        NoiseTab.SourceChanged += ApplySource;
-        SeamTab.Changed += ApplySettings;
-        EffectTab.Changed += ApplySettings;
+        NoiseTab.Changed += OnNoiseTabChanged;
+        NoiseTab.TextureChanged += OnLayerTextureChanged;
         Strip.Changed += ApplySettings;
-        Timeline.Attach(_engine.Timeline);
-        Timeline.Changed += MarkDirty;
 
-        TabSegment.SelectionChanged += (_, _) => ShowTab(TabSegment.SelectedIndex);
         Top.ViewRectMenuItem.Click += (_, _) => Strip.Mode = PreviewMode.Rect;
         Top.ZoomFitMenuItem.Click += (_, _) => _engine.View = new CanvasView { RotationDegrees = _engine.View.RotationDegrees };
         Top.Zoom100MenuItem.Click += (_, _) => ZoomToActualSize();
         Top.ResetRotationMenuItem.Click += (_, _) => _engine.View = _engine.View with { RotationDegrees = 0 };
 
-        _navigator = new CanvasNavigator(Viewport, () => _engine.View, view => _engine.View = view,
-            () => Strip.Mode != PreviewMode.Effect);
+        _navigator = new CanvasNavigator(Viewport, () => _engine.View, view => _engine.View = view);
 
         // キャンバスの上で Space を押している間は、フォーカス中のボタンを押さない (Space + ドラッグが移動のため)
         AddHandler(KeyDownEvent, (_, e) =>
@@ -75,8 +74,7 @@ public partial class MainWindow : Window
                 e.Handled = true;
         }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         Top.ViewPolarMenuItem.Click += (_, _) => Strip.Mode = PreviewMode.Polar;
-        Top.ViewSeamMenuItem.Click += (_, _) => Strip.Mode = PreviewMode.SeamCheck;
-        Top.ViewEffectMenuItem.Click += (_, _) => Strip.Mode = PreviewMode.Effect;
+        Top.ViewTileMenuItem.Click += (_, _) => Strip.Mode = PreviewMode.Tile4x4;
 
         Status.ReloadButton.Click += (_, _) => _engine.ReloadShaders();
         ToolTip.SetTip(Status.ReloadButton, Loc.F("S.Status.ShaderFolder", _engine.ShaderDirectory));
@@ -94,12 +92,14 @@ public partial class MainWindow : Window
             RootPanel.Opacity = 1;
             _renderThread = new Thread(RenderLoop) { IsBackground = true, Name = "uskEffect Render" };
             _renderThread.Start();
+            LoadTypeSamples();
+            // 新規で始めるときは、まず種類を選ぶ
+            Dispatcher.UIThread.Post(ShowStartTypeMenu, DispatcherPriority.Loaded);
         };
         Closed += (_, _) =>
         {
             _closed = true;
             SaveSliderLimits();
-            Timeline.Stop();
             _renderThread?.Join();
             _engine.Dispose();
         };
@@ -139,48 +139,53 @@ public partial class MainWindow : Window
     private static double ResourceDouble(string key) =>
         Application.Current!.TryGetResource(key, null, out var value) && value is double d ? d : 0;
 
-    private void ShowTab(int index)
-    {
-        NoiseTab.IsVisible = index == 0;
-        SeamTab.IsVisible = index == 1;
-        EffectTab.IsVisible = index == 2;
-        LayerTab.IsVisible = index == 3;
-    }
-
     private void ApplySettings()
     {
         if (_engine is null || _suppressApply)
             return;
 
         var mode = Strip.Mode;
-        var effect = EffectTab.Read();
-        _engine.Noise = NoiseTab.Read();
-        _engine.Effect = effect;
+        _canvasNoise = _canvasNoise with { Resolution = NoiseTab.Resolution };
+        _engine.Noise = _canvasNoise;
+        _engine.CanvasSize = NoiseTab.CustomSize is { } size ? new CanvasPixelSize(size.Width, size.Height) : null;
+        _engine.Output = Strip.Output;
         _engine.Preview = ReadPreviewSettings();
 
-        // 極座標の設定はエフェクトを極座標で貼るときにも使う
-        Strip.ShowPolarSettings = mode == PreviewMode.Polar
-            || (mode == PreviewMode.Effect && effect.Mapping == EffectMapping.Polar);
+        Strip.ShowPolarSettings = mode == PreviewMode.Polar;
 
         MarkDirty();
     }
 
     private PreviewSettings ReadPreviewSettings()
     {
-        var (tilingX, tilingY, offsetX, offsetY) = NoiseTab.ReadTexture();
         return new PreviewSettings
         {
             Mode = Strip.Mode,
-            ScrollSpeedU = EffectTab.ScrollU,
-            ScrollSpeedV = EffectTab.ScrollV,
             Polar = Strip.Polar,
-            Heatmap = SeamTab.Heatmap,
-            HeatThreshold = SeamTab.Threshold,
-            TilingX = tilingX,
-            TilingY = tilingY,
-            OffsetX = offsetX,
-            OffsetY = offsetY,
         };
+    }
+
+    // サンプルは見本なので、描けなくても操作は止めない
+    private void LoadTypeSamples()
+    {
+        var engine = _engine!;
+        var settings = NoiseTab.SampleSettings();
+        Task.Run(() =>
+        {
+            try
+            {
+                var samples = engine.RenderSamples(settings);
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (!_closed)
+                        NoiseTab.SetSamples(samples);
+                });
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                Debug.WriteLine(ex);
+            }
+        });
     }
 
     // Avalonia の RequestAnimationFrame では 60Hz 環境でも 40fps 程度しか回らなかったため、
@@ -238,6 +243,13 @@ public partial class MainWindow : Window
         if (_closed)
             return;
 
+        if (stats.LayerThumbnails is { } thumbnails && !ReferenceEquals(thumbnails, _shownThumbnails))
+        {
+            _shownThumbnails = thumbnails;
+            LayerTab.ShowThumbnails(thumbnails);
+            ShowCurrentLayerOnRail();
+        }
+
         if (stats.DeviceRecoveries != _shownRecoveries)
         {
             _shownRecoveries = stats.DeviceRecoveries;
@@ -246,21 +258,11 @@ public partial class MainWindow : Window
         }
 
         Status.ShowStats(stats, fps);
-        SeamTab.ShowAnalysis(stats.Seam, stats.SeamAnalysisPending);
-        ShowSeamMark(stats.Seam);
         RefreshUndoButtons();
         _lastStats = stats;
         Strip.SetZoom(ZoomRatio(stats), _engine?.View.RotationDegrees ?? 0);
     }
 
-    // シームのタブに判定を常に出す
-    private void ShowSeamMark(SeamAnalysis? seam)
-    {
-        bool seamless = seam is { Horizontal.IsSeamless: true, Vertical.IsSeamless: true };
-        SeamMarkText.Text = seam is null ? "" : seamless ? "✓" : "!";
-        SeamMarkText.Classes.Set("ok", seam is not null && seamless);
-        SeamMarkText.Classes.Set("bad", seam is not null && !seamless);
-    }
 
     // Shaders/Preview.hlsl の全体表示の倍率と同じ計算 (余白は RenderEngine.MainContentMargin の両側)
     private static double FitScale(RenderStats stats)
@@ -271,7 +273,7 @@ public partial class MainWindow : Window
 
     private double? ZoomRatio(RenderStats stats)
     {
-        if (Strip.Mode == PreviewMode.Effect || stats.TextureWidth <= 0)
+        if (stats.TextureWidth <= 0)
             return null;
         return FitScale(stats) * (_engine?.View.Zoom ?? 1);
     }
@@ -284,7 +286,7 @@ public partial class MainWindow : Window
     }
 
     // 開発中はリポジトリ直下の Shaders/ を直接監視してホットリロードする
-    private static string LocateShaderDirectory()
+    internal static string LocateShaderDirectory()
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
         {

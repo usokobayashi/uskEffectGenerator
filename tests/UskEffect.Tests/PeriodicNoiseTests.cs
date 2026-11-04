@@ -23,7 +23,7 @@ public sealed class PeriodicNoiseTests(NoiseFixture fixture) : IClassFixture<Noi
     public static TheoryData<NoiseType, FractalMode> AllTypes()
     {
         var data = new TheoryData<NoiseType, FractalMode>();
-        foreach (var type in Enum.GetValues<NoiseType>())
+        foreach (var type in Enum.GetValues<NoiseType>().Where(t => t.IsNoise()))
             foreach (var fractal in Enum.GetValues<FractalMode>())
                 data.Add(type, fractal);
         return data;

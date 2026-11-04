@@ -59,6 +59,11 @@
       <Setter Property="Foreground" Value="{StaticResource Ue.Text}" />
     </Style>
 
+    <Style Selector="^.ico.on">
+      <Setter Property="Background" Value="{StaticResource Ue.Fill}" />
+      <Setter Property="Foreground" Value="{StaticResource Ue.Accent}" />
+    </Style>
+
     <Style Selector="^.tool">
       <Setter Property="Width" Value="{StaticResource Ue.Size.Tool}" />
       <Setter Property="Height" Value="{StaticResource Ue.Size.Tool}" />
@@ -69,6 +74,17 @@
       <Setter Property="Foreground" Value="{StaticResource Ue.Text}" />
     </Style>
     <Style Selector="^.tool.selected:not(:disabled)">
+      <Setter Property="Background" Value="{StaticResource Ue.Fill}" />
+      <Setter Property="Foreground" Value="{StaticResource Ue.Accent}" />
+    </Style>
+
+    <Style Selector="^.typeItem">
+      <Setter Property="Padding" Value="4,2" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="^.typeItem:pointerover"><Setter Property="Background" Value="{StaticResource Ue.Hover}" /></Style>
+    <Style Selector="^.typeItem.selected">
       <Setter Property="Background" Value="{StaticResource Ue.Fill}" />
       <Setter Property="Foreground" Value="{StaticResource Ue.Accent}" />
     </Style>
@@ -145,6 +161,9 @@
       </Setter>
     </Style>
     <Style Selector="^:pointerover /template/ Border#PART_Knob"><Setter Property="Background" Value="{StaticResource Ue.Accent}" /></Style>
+    <!-- ドラッグ中はカーソルに遅れないよう、遷移を切る。クリックとキー操作では動かす -->
+    <Style Selector="^.dragging /template/ Border#PART_Fill"><Setter Property="Transitions" Value="{x:Null}" /></Style>
+    <Style Selector="^.dragging /template/ Border#PART_Knob"><Setter Property="Transitions" Value="{x:Null}" /></Style>
     <Style Selector="^:disabled"><Setter Property="Opacity" Value="{StaticResource Ue.Size.DisabledOpacity}" /></Style>
 
     <Style Selector="^.compact">

@@ -10,13 +10,10 @@ namespace UskEffect.App.Views;
 public partial class ViewStrip : UserControl
 {
     // 表示の切り替えの並び
-    private static readonly PreviewMode[] Modes = [PreviewMode.Rect, PreviewMode.Polar, PreviewMode.SeamCheck, PreviewMode.Effect];
+    private static readonly PreviewMode[] Modes = [PreviewMode.Rect, PreviewMode.Polar, PreviewMode.Tile4x4];
 
     /// <summary>表示か極座標の設定が変わったときに発生する。</summary>
     public event Action? Changed;
-
-    /// <summary>「このレイヤーを消去」を押したときに発生する。</summary>
-    public event Action? ClearPaintRequested;
 
     private PaintTool _tool = PaintTool.Brush;
 
@@ -24,20 +21,34 @@ public partial class ViewStrip : UserControl
     {
         InitializeComponent();
 
-        BrushSizeField.ValueChanged += (_, _) => UpdateBrushSummary();
-        ClearPaintButton.Click += (_, _) =>
-        {
-            BrushButton.Flyout?.Hide();
-            ClearPaintRequested?.Invoke();
-        };
-        UpdateBrushSummary();
+        foreach (RangeBase field in new RangeBase[] { BrushSizeField, BrushHardnessField, BrushOpacityField })
+            field.ValueChanged += (_, _) => UpdateBrushPreview();
+        BrushColorSwatch.ColorChanged += UpdateBrushPreview;
+        BrushInvertButton.Click += (_, _) => InvertBrushColor();
+        UpdateBrushPreview();
 
         ViewSegment.SelectionChanged += (_, _) => Changed?.Invoke();
+        OutputSegment.SelectionChanged += (_, _) => Changed?.Invoke();
         foreach (RangeBase field in new RangeBase[] { InnerRadiusField, OuterRadiusField, RotationField })
             field.ValueChanged += (_, _) => OnPolarChanged();
         foreach (ToggleButton toggle in new ToggleButton[] { FlipAngularSwitch, FlipRadialSwitch })
             toggle.IsCheckedChanged += (_, _) => Changed?.Invoke();
         UpdateSummary();
+    }
+
+    /// <summary>プレビューと書き出しの形。</summary>
+    public CompositeOutput Output
+    {
+        get => OutputSegment.SelectedIndex == 1 ? CompositeOutput.Mask : CompositeOutput.BlackToAlpha;
+        set => OutputSegment.SelectedIndex = value == CompositeOutput.Mask ? 1 : 0;
+    }
+
+    public bool IsPopupOpen => BrushButton.Flyout!.IsOpen || PolarButton.Flyout!.IsOpen;
+
+    public void ClosePopups()
+    {
+        BrushButton.Flyout!.Hide();
+        PolarButton.Flyout!.Hide();
     }
 
     public PreviewMode Mode
@@ -85,7 +96,7 @@ public partial class ViewStrip : UserControl
         {
             _tool = value;
             BrushColorRow.IsVisible = value == PaintTool.Brush;
-            UpdateBrushSummary();
+            UpdateBrushPreview();
         }
     }
 
@@ -111,15 +122,25 @@ public partial class ViewStrip : UserControl
         };
     }
 
-    private void UpdateBrushSummary()
+    private void UpdateBrushPreview()
     {
-        string tool = Loc.T(_tool switch
+        // 消しゴムとぼかしに色はないので白で見せる
+        Color color = _tool == PaintTool.Brush ? BrushColorSwatch.Color : Colors.White;
+        double size = UskEffect.App.Controls.Ui.BrushPreview.NormalizeSize(BrushSizeField.Value, BrushSizeField.Minimum, BrushSizeField.Maximum);
+        foreach (var preview in new[] { BrushButtonPreview, BrushLargePreview })
         {
-            PaintTool.Eraser => "S.Tool.Eraser",
-            PaintTool.Blur => "S.Tool.Blur",
-            _ => "S.Tool.Brush",
-        });
-        BrushSummaryText.Text = $"{tool} {BrushSizeField.Value:0}";
+            preview.BrushColor = color;
+            preview.Hardness = BrushHardnessField.Value;
+        }
+        BrushLargePreview.SizeRatio = size;
+        BrushLargePreview.Flow = BrushOpacityField.Value;
+    }
+
+    /// <summary>色を反転する。白と黒をすぐ入れ替えられる。</summary>
+    private void InvertBrushColor()
+    {
+        Color color = BrushColorSwatch.Color;
+        BrushColorSwatch.Color = Color.FromRgb((byte)(255 - color.R), (byte)(255 - color.G), (byte)(255 - color.B));
     }
 
     public void SetZoom(double? ratio, double rotationDegrees)

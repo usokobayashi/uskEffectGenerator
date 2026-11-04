@@ -1,7 +1,5 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using UskEffect.Graphics.Analysis;
-using UskEffect.Graphics.Effects;
 using UskEffect.Graphics.Painting;
 using Vortice.Direct3D11;
 using Vortice.DXGI;
@@ -17,16 +15,18 @@ public readonly record struct RenderStats(
     double ComputeMilliseconds,
     double FrameMilliseconds,
     string? ShaderErrors,
-    SeamAnalysis? Seam,
-    bool SeamAnalysisPending,
-    int DeviceRecoveries = 0);
+    int DeviceRecoveries = 0,
+    IReadOnlyList<LayerThumbnail>? LayerThumbnails = null);
+
+/// <summary>キャンバスの大きさ [画素]。</summary>
+public sealed record CanvasPixelSize(int Width, int Height);
 
 /// <summary>ブラシの大きさを示す輪の位置。画面の画素と、テクスチャの画素での直径。</summary>
 public sealed record PaintCursor(int X, int Y, double Diameter);
 
 /// <summary>
 /// 描画エンジン。ノイズ生成 → プレビュー描画 → Present をレンダースレッドで回す。
-/// ノイズを作り直したら、操作が落ち着いてから GPU から読み戻して継ぎ目を解析する (FR-04)。
+/// 操作が落ち着いたら、レイヤーの控えと縮小画像を作る。
 /// D3D11 の即時コンテキストはスレッドセーフでないため、D3D を触る公開メソッドは _sync で直列化する。
 /// 設定はイミュータブルな record の差し替えで受け取るので、UI スレッドからロックなしで設定できる。
 /// HLSL ファイルの変更を監視し、次フレームで再コンパイルする。
@@ -37,16 +37,13 @@ public sealed class RenderEngine : IDisposable
     private GpuDevice _gpu;
     private NoiseGenerator _noise;
     private PreviewRenderer _preview;
-    private EffectRenderer _effect;
     private PaintRenderer _paint;
     private GpuTimer _timer;
     private readonly FileSystemWatcher? _watcher;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private readonly string _noiseShaderPath;
     private readonly string _previewShaderPath;
-    private readonly string _effectShaderPath;
     private readonly string _paintShaderPath;
-    private TimeSpan _lastFrameTime;
 
     // 中央のキャンバスの周りの余白 [px]
     private const float MainContentMargin = 12f;
@@ -69,6 +66,51 @@ public sealed class RenderEngine : IDisposable
     // 復帰に使うレイヤーの控え。GPU が読めなくなった後の保存にも使う
     private IReadOnlyList<LayerData>? _layerBackup;
     private bool _backupPending;
+    private volatile CanvasPixelSize? _canvasSize;
+    private volatile bool _transparentBase;
+    private volatile CompositeOutput _output;
+    private IReadOnlyList<LayerThumbnail>? _thumbnails;
+
+    /// <summary>一番下を透明から始める。false なら、読み込んだ画像かノイズの上にレイヤーを重ねる。</summary>
+    public bool TransparentBase
+    {
+        get => _transparentBase;
+        set
+        {
+            _transparentBase = value;
+            lock (_sync)
+                _paint.MarkAllDirty();
+        }
+    }
+
+    /// <summary>プレビューと書き出しの形。</summary>
+    public CompositeOutput Output
+    {
+        get => _output;
+        set
+        {
+            if (value == _output)
+                return;
+            _output = value;
+            lock (_sync)
+                _paint.MarkAllDirty();
+        }
+    }
+
+    /// <summary>まだ何もしていない最初の状態か。</summary>
+    public bool IsPristine => _paint.IsPristine && _paintCommands.IsEmpty;
+
+    /// <summary>キャンバスの大きさの指定。null ならノイズの解像度 (正方形)。読み込んだ画像に合わせるときに使う。</summary>
+    public CanvasPixelSize? CanvasSize
+    {
+        get => _canvasSize;
+        set => _canvasSize = value;
+    }
+
+    private int CanvasWidth => _image?.Width ?? _canvasSize?.Width ?? _noise.Width;
+    private int CanvasHeight => _image?.Height ?? _canvasSize?.Height ?? _noise.Height;
+
+    private bool NeedsComposite => _paint.HasPaint || _transparentBase || _output != CompositeOutput.Color;
 
     /// <summary>GPU を失って、まだ復帰していないか。</summary>
     public bool IsDeviceLost => _deviceLost;
@@ -83,15 +125,12 @@ public sealed class RenderEngine : IDisposable
     private volatile bool _shadersDirty = true;
     private string? _noiseErrors;
     private string? _previewErrors;
-    private string? _effectErrors;
     private string? _paintErrors;
 
-    // スライダー操作中に毎フレーム読み戻すと描画が詰まるので、最後の生成から少し待って 1 回だけ解析する
-    private static readonly TimeSpan AnalysisDelay = TimeSpan.FromMilliseconds(150);
+    // スライダー操作中に毎フレーム読み戻すと描画が詰まるので、最後の変更から少し待って 1 回だけ行う
+    private static readonly TimeSpan IdleDelay = TimeSpan.FromMilliseconds(150);
     private bool _analysisPending;
     private TimeSpan _lastNoiseGenerated;
-    private Task? _analysisTask;
-    private volatile SeamAnalysis? _seamAnalysis;
 
     // 読み込んだ画像。null ならノイズを表示する
     private ImageData? _image;
@@ -99,16 +138,13 @@ public sealed class RenderEngine : IDisposable
     private ID3D11ShaderResourceView? _imageView;
 
     public volatile PreviewSettings Preview = new();
-    public volatile EffectSettings Effect = new();
 
     /// <summary>中央のキャンバスの表示状態。UI スレッドから差し替える。</summary>
     public volatile CanvasView View = new();
 
-    /// <summary>エフェクトプレビューの再生位置。UI スレッドから再生操作できる。</summary>
-    public EffectTimeline Timeline { get; } = new();
     public volatile bool VSync = true;
 
-    /// <summary>ブラシの大きさを示す輪。null で出さない。エフェクトの表示では描かない。</summary>
+    /// <summary>ブラシの大きさを示す輪。null で出さない。</summary>
     public volatile PaintCursor? Cursor;
 
     public NoiseSettings Noise
@@ -130,14 +166,12 @@ public sealed class RenderEngine : IDisposable
         ShaderDirectory = shaderDirectory;
         _noiseShaderPath = Path.Combine(shaderDirectory, "Noise", "PeriodicNoise.hlsl");
         _previewShaderPath = Path.Combine(shaderDirectory, "Preview.hlsl");
-        _effectShaderPath = Path.Combine(shaderDirectory, "Effect.hlsl");
         _paintShaderPath = Path.Combine(shaderDirectory, "Paint", "Paint.hlsl");
 
         _gpu = CreateDevice();
         _noise = new NoiseGenerator(_gpu);
         _preview = new PreviewRenderer(_gpu);
-        _effect = new EffectRenderer(_gpu);
-        _paint = new PaintRenderer(_gpu);
+        _paint = new PaintRenderer(_gpu, _noise);
         _timer = new GpuTimer(_gpu);
 
         if (Directory.Exists(shaderDirectory))
@@ -227,8 +261,7 @@ public sealed class RenderEngine : IDisposable
             var gpu = Track(CreateDevice());
             var noise = Track(new NoiseGenerator(gpu));
             var preview = Track(new PreviewRenderer(gpu));
-            var effect = Track(new EffectRenderer(gpu));
-            var paint = Track(new PaintRenderer(gpu));
+            var paint = Track(new PaintRenderer(gpu, noise));
             var timer = Track(new GpuTimer(gpu));
             paint.SetLayers(_layerBackup);
 
@@ -240,7 +273,7 @@ public sealed class RenderEngine : IDisposable
             }
             var target = _surfaceHwnd != IntPtr.Zero ? Track(new SwapChainTarget(gpu, _surfaceHwnd, _surfaceWidth, _surfaceHeight)) : null;
 
-            (_gpu, _noise, _preview, _effect, _paint, _timer) = (gpu, noise, preview, effect, paint, timer);
+            (_gpu, _noise, _preview, _paint, _timer) = (gpu, noise, preview, paint, timer);
             (_imageTexture, _imageView) = image;
             _target = target;
         }
@@ -287,7 +320,7 @@ public sealed class RenderEngine : IDisposable
         {
             _target = null;
         }
-        foreach (var item in new IDisposable?[] { _imageView, _imageTexture, _timer, _paint, _effect, _preview, _noise, _gpu })
+        foreach (var item in new IDisposable?[] { _imageView, _imageTexture, _timer, _paint, _preview, _noise, _gpu })
         {
             if (item is not null)
                 DisposeQuietly(item);
@@ -333,7 +366,6 @@ public sealed class RenderEngine : IDisposable
             if (image is not null)
                 (_imageTexture, _imageView) = CreateImageTexture(_gpu, image);
 
-            // 継ぎ目の解析をやり直す
             _paint.MarkAllDirty();
             _analysisPending = true;
             _lastNoiseGenerated = _clock.Elapsed;
@@ -371,16 +403,6 @@ public sealed class RenderEngine : IDisposable
             _paintCommands.Enqueue((source, isColor) => _paint.Stamp(brush, dabs, polar, source, isColor));
     }
 
-    /// <summary>継ぎ目の自動ブレンドのプレビューを作り直す (FR-13)。UI スレッドから呼んでよい。</summary>
-    public void PreviewSeamBlend(SeamBlendSettings settings) =>
-        _paintCommands.Enqueue((source, isColor) => _paint.PreviewSeamBlend(settings, source, isColor));
-
-    /// <summary>プレビューを確定する。UI スレッドから呼んでよい。</summary>
-    public void CommitSeamBlend() => _paintCommands.Enqueue((_, _) => _paint.CommitSeamBlend());
-
-    /// <summary>プレビューを取り消す。UI スレッドから呼んでよい。</summary>
-    public void CancelSeamBlend() => _paintCommands.Enqueue((_, _) => _paint.CancelSeamBlend());
-
     /// <summary>ストロークの終わり。ここまでを 1 回の「元に戻す」にする。UI スレッドから呼んでよい。</summary>
     public void EndStroke() => _paintCommands.Enqueue((_, _) => _paint.CommitEdit());
 
@@ -394,11 +416,19 @@ public sealed class RenderEngine : IDisposable
     public bool CanUndo => _paint.CanUndo || !_paintCommands.IsEmpty;
     public bool CanRedo => _paint.CanRedo;
 
-    public void AddLayer() => WithPaint(_paint.AddLayer);
+    public void AddLayer() => WithPaint(() => _paint.AddLayer());
     public void RemoveLayer(int id) => WithPaint(() => _paint.RemoveLayer(id));
     public void MoveLayer(int id, int delta) => WithPaint(() => _paint.MoveLayer(id, delta));
     public void SetLayerVisible(int id, bool visible) => WithPaint(() => _paint.SetLayerVisible(id, visible));
     public void SetLayerOpacity(int id, float opacity) => WithPaint(() => _paint.SetLayerOpacity(id, opacity));
+    public void SetLayerInvert(int id, bool invert) => WithPaint(() => _paint.SetLayerInvert(id, invert));
+    public void SetLayerMask(int id, bool isMask) => WithPaint(() => _paint.SetLayerMask(id, isMask));
+    public void AddImageLayer(ImageData image, string name) => WithPaint(() => _paint.AddImageLayer(image, name));
+    public void AddLayer(NoiseSettings? noise) => WithPaint(() => _paint.AddLayer(noise));
+    public void SetLayerTexture(int id, float tilingX, float tilingY, float offsetX, float offsetY) =>
+        WithPaint(() => _paint.SetLayerTexture(id, tilingX, tilingY, offsetX, offsetY));
+    public void SetLayerBlend(int id, LayerBlendMode blend) => WithPaint(() => _paint.SetLayerBlend(id, blend));
+    public void SetLayerNoise(int id, NoiseSettings? noise) => WithPaint(() => _paint.SetLayerNoise(id, noise));
     public void SetActiveLayer(int id) => WithPaint(() => _paint.SetActiveLayer(id));
     public void Undo() => WithPaint(() => _paint.Undo());
     public void Redo() => WithPaint(() => _paint.Redo());
@@ -442,7 +472,7 @@ public sealed class RenderEngine : IDisposable
         {
             RequireDevice();
             EnsureSourceReady();
-            return _paint.HasPaint ? _paint.ReadComposite() : null;
+            return NeedsComposite ? _paint.ReadComposite() : null;
         }
     }
 
@@ -451,6 +481,17 @@ public sealed class RenderEngine : IDisposable
     {
         if (!EnsureDevice())
             throw new InvalidOperationException("GPU が復帰していないため読み取れません。少し待ってからやり直してください。");
+    }
+
+    /// <summary>合成結果の明るさを読み戻す。16bit の書き出し用。</summary>
+    public float[] ReadCompositeLuminance()
+    {
+        lock (_sync)
+        {
+            RequireDevice();
+            EnsureSourceReady();
+            return _paint.ReadCompositeLuminance();
+        }
     }
 
     /// <summary>レイヤーを読み戻す (保存用)。何もしていなければ null。GPU を失っている間は最後の控えを返す。</summary>
@@ -469,33 +510,33 @@ public sealed class RenderEngine : IDisposable
         }
     }
 
-    /// <summary>今の表示で、画面の画素とテクスチャの画素を対応付ける。エフェクトの表示では使わない。</summary>
+    /// <summary>今の表示で、画面の画素とテクスチャの画素を対応付ける。</summary>
     public ICanvasMapping? CreateCanvasMapping(int viewportWidth, int viewportHeight)
     {
         var image = _image;
-        int width = image?.Width ?? _noise.Width;
-        int height = image?.Height ?? _noise.Height;
+        int width = image?.Width ?? _canvasSize?.Width ?? _noise.Width;
+        int height = image?.Height ?? _canvasSize?.Height ?? _noise.Height;
         if (viewportWidth <= 0 || viewportHeight <= 0 || width <= 0 || height <= 0)
             return null;
-        return BuildMapping(viewportWidth, viewportHeight, width, height, Preview, View, _clock.Elapsed.TotalSeconds);
+        return BuildMapping(viewportWidth, viewportHeight, width, height, Preview, View);
     }
 
-    private static ICanvasMapping BuildMapping(int viewportWidth, int viewportHeight, int width, int height,
-        PreviewSettings preview, CanvasView view, double time)
+    // レイヤーの繰り返しも含めて対応付けるので、繰り返したレイヤーにも描いたとおりの場所へ入る
+    private ICanvasMapping BuildMapping(int viewportWidth, int viewportHeight, int width, int height,
+        PreviewSettings preview, CanvasView view)
     {
-        double offsetX = preview.OffsetX + preview.ScrollSpeedU * time;
-        double offsetY = preview.OffsetY + preview.ScrollSpeedV * time;
-        return preview.Mode switch
-        {
-            PreviewMode.Polar => new PolarCanvasMapping(viewportWidth, viewportHeight, width, height, MainContentMargin, view,
-                preview.Polar, preview.TilingX, preview.TilingY, offsetX, offsetY),
-
-            // シームの表示は半タイルずらしただけで、Tiling もスクロールも効かない
-            PreviewMode.SeamCheck => new CanvasMapping(viewportWidth, viewportHeight, width, height, MainContentMargin, view, 1, 1, 0.5, 0.5),
-
-            _ => new CanvasMapping(viewportWidth, viewportHeight, width, height, MainContentMargin, view,
-                preview.TilingX, preview.TilingY, offsetX, offsetY),
-        };
+        var layer = _paint.Layers.FirstOrDefault(l => l.Id == _paint.ActiveLayerId);
+        double viewTiling = preview.Mode == PreviewMode.Tile4x4 ? PreviewSettings.TilePreviewCount : 1;
+        double layerTilingX = layer?.TilingX ?? 1, layerTilingY = layer?.TilingY ?? 1;
+        double tilingX = preview.TilingX * viewTiling * layerTilingX;
+        double tilingY = preview.TilingY * viewTiling * layerTilingY;
+        double offsetX = preview.OffsetX * layerTilingX + (layer?.OffsetX ?? 0);
+        double offsetY = preview.OffsetY * layerTilingY + (layer?.OffsetY ?? 0);
+        return preview.Mode == PreviewMode.Polar
+            ? new PolarCanvasMapping(viewportWidth, viewportHeight, width, height, MainContentMargin, view,
+                preview.Polar, tilingX, tilingY, offsetX, offsetY)
+            : new CanvasMapping(viewportWidth, viewportHeight, width, height, MainContentMargin, view,
+                tilingX, tilingY, offsetX, offsetY);
     }
 
     private void LoadShaders()
@@ -503,8 +544,8 @@ public sealed class RenderEngine : IDisposable
         _shadersDirty = false;
         _noiseErrors = _noise.LoadShader(_noiseShaderPath);
         _previewErrors = _preview.LoadShader(_previewShaderPath);
-        _effectErrors = _effect.LoadShader(_effectShaderPath);
         _paintErrors = _paint.LoadShader(_paintShaderPath);
+        _paint.InvalidateGenerated();
         _noiseDirty = true;
     }
 
@@ -527,18 +568,18 @@ public sealed class RenderEngine : IDisposable
     private void SyncPaint()
     {
         var source = _imageView ?? _noise.ShaderResourceView;
-        if (source is null || (!_paint.HasPaint && _paintCommands.IsEmpty))
+        if (source is null || (!NeedsComposite && _paintCommands.IsEmpty))
             return;
 
         bool isColor = _image is not null;
-        _paint.EnsureSize(_image?.Width ?? _noise.Width, _image?.Height ?? _noise.Height);
+        _paint.EnsureSize(CanvasWidth, CanvasHeight);
 
         bool changed = false;
         while (_paintCommands.TryDequeue(out var command))
         {
             command(source, isColor);
             // 保存されていた大きさのレイヤーを読み込んだときに、元の画像の大きさへ戻す
-            _paint.EnsureSize(_image?.Width ?? _noise.Width, _image?.Height ?? _noise.Height);
+            _paint.EnsureSize(CanvasWidth, CanvasHeight);
             changed = true;
         }
         if (changed)
@@ -547,8 +588,8 @@ public sealed class RenderEngine : IDisposable
             _backupPending = true;
             _lastNoiseGenerated = _clock.Elapsed;
         }
-        if (_paint.HasPaint)
-            _paint.UpdateComposite(source, isColor);
+        if (NeedsComposite)
+            _paint.UpdateComposite(source, isColor, _transparentBase, _output);
     }
 
     /// <summary>1 フレーム描く。描画先がなければ何もせず false を返す。</summary>
@@ -594,51 +635,34 @@ public sealed class RenderEngine : IDisposable
             SyncPaint();
 
             // 描いた内容があれば、どの表示も合成結果を読む (要件 §3.4)
-            bool painted = _paint.HasPaint && _paint.CompositeView is not null;
-            bool imageIsColor = _image is not null;
-            bool isColor = imageIsColor || painted;
+            bool painted = NeedsComposite && _paint.CompositeView is not null;
+            bool isColor = _image is not null || painted;
             var sourceView = painted ? _paint.CompositeView : _imageView ?? _noise.ShaderResourceView;
-            int sourceWidth = _image?.Width ?? _noise.Width;
-            int sourceHeight = _image?.Height ?? _noise.Height;
-
-            var now = _clock.Elapsed;
-            Timeline.Advance((now - _lastFrameTime).TotalSeconds);
-            _lastFrameTime = now;
+            int sourceWidth = CanvasWidth;
+            int sourceHeight = CanvasHeight;
 
             var preview = Preview;
-            var effect = Effect;
-            var frame = EffectEvaluator.Evaluate(effect, preview, Timeline.Time, Timeline.NormalizedTime);
-            float time = (float)now.TotalSeconds;
+            var view = View;
+            _preview.Render(_target.RenderTargetView, _target.Width, _target.Height, sourceView,
+                sourceWidth, sourceHeight, isColor, preview, MainContentMargin, view);
 
-            if (preview.Mode == PreviewMode.Effect)
+            if (Cursor is { } cursor && sourceWidth > 0 && sourceHeight > 0)
             {
-                _effect.Render(_target.RenderTargetView, _target.Width, _target.Height, sourceView,
-                    effect, preview.Polar, frame, imageIsColor, sourceIsPaintedNoise: painted && !imageIsColor);
-            }
-            else
-            {
-                var view = View;
-                _preview.Render(_target.RenderTargetView, _target.Width, _target.Height, sourceView,
-                    sourceWidth, sourceHeight, isColor, preview, time, _seamAnalysis, MainContentMargin, view);
-
-                if (Cursor is { } cursor && sourceWidth > 0 && sourceHeight > 0)
-                {
-                    var mapping = BuildMapping(_target.Width, _target.Height, sourceWidth, sourceHeight, preview, view, time);
-                    _paint.DrawCursor(_target.RenderTargetView, _target.Width, _target.Height, cursor.X, cursor.Y,
-                        (float)(cursor.Diameter / 2 * mapping.PixelScale));
-                }
+                var mapping = BuildMapping(_target.Width, _target.Height, sourceWidth, sourceHeight, preview, view);
+                _paint.DrawCursor(_target.RenderTargetView, _target.Width, _target.Height, cursor.X, cursor.Y,
+                    (float)(cursor.Diameter / 2 * mapping.PixelScale));
             }
             _timer.EndFrame();
             _target.Present(VSync);
-            StartSeamAnalysisIfIdle();
+            RunIdleWork();
         }
 
-        var errorList = new[] { _noiseErrors, _previewErrors, _effectErrors, _paintErrors }.Where(e => e is not null).ToList();
+        var errorList = new[] { _noiseErrors, _previewErrors, _paintErrors }.Where(e => e is not null).ToList();
         string? errors = errorList.Count == 0 ? null : string.Join(Environment.NewLine, errorList);
-        stats = new RenderStats(_gpu.AdapterName, _image?.Width ?? _noise.Width, _image?.Height ?? _noise.Height,
+        stats = new RenderStats(_gpu.AdapterName, CanvasWidth, CanvasHeight,
             _target?.Width ?? 0, _target?.Height ?? 0,
             _timer.ComputeMilliseconds, _timer.FrameMilliseconds, errors,
-            _seamAnalysis, _analysisPending || _analysisTask is { IsCompleted: false }, _deviceRecoveries);
+            _deviceRecoveries, _thumbnails);
         return rendered;
     }
 
@@ -668,13 +692,32 @@ public sealed class RenderEngine : IDisposable
         }
     }
 
-    // 操作が落ち着いたときに取る。自動ブレンドの確認中はまだ確定していないので取らない
+    // 操作が落ち着いたときに取る
     private void BackupLayers()
     {
-        if (!_backupPending || _paint.IsPreviewingBlend)
+        if (!_backupPending)
             return;
         _backupPending = false;
         _layerBackup = _paint.IsPristine ? null : _paint.ReadLayers();
+    }
+
+    private void RefreshThumbnails()
+    {
+        if ((_imageView ?? _noise.ShaderResourceView) is { } source)
+            _thumbnails = _paint.RenderThumbnails(source, _image is not null);
+    }
+
+    /// <summary>レイヤーの縮小画像を今すぐ作る。普段は操作が落ち着くたびに RenderStats で届く。</summary>
+    public IReadOnlyList<LayerThumbnail> RenderLayerThumbnails()
+    {
+        lock (_sync)
+        {
+            if (!EnsureDevice())
+                return [];
+            EnsureSourceReady();
+            RefreshThumbnails();
+            return _thumbnails ?? [];
+        }
     }
 
     /// <summary>テスト用。溜まった操作を済ませて控えを取る。</summary>
@@ -687,37 +730,39 @@ public sealed class RenderEngine : IDisposable
         }
     }
 
-    private void StartSeamAnalysisIfIdle()
+    /// <summary>
+    /// 選択欄に出すサンプルを描く。本番と同じシェーダーを使うので、見本と結果が食い違わない。
+    /// GPU かシェーダーが使えなければ空を返す。
+    /// </summary>
+    public IReadOnlyList<float[]> RenderSamples(IReadOnlyList<NoiseSettings> samples)
     {
-        if (!_analysisPending || _clock.Elapsed - _lastNoiseGenerated < AnalysisDelay)
-            return;
-        if (_analysisTask is { IsCompleted: false })
-            return; // 前の解析が終わってから。終わった時点でまだ pending なら次フレームで再解析する
+        lock (_sync)
+        {
+            if (!EnsureDevice())
+                return [];
+            using var generator = new NoiseGenerator(_gpu);
+            if (generator.LoadShader(_noiseShaderPath) is not null)
+                return [];
+            return samples.Select(settings =>
+            {
+                generator.Generate(settings);
+                return generator.ReadPixels();
+            }).ToArray();
+        }
+    }
 
+    private void RunIdleWork()
+    {
+        if (!_analysisPending || _clock.Elapsed - _lastNoiseGenerated < IdleDelay)
+            return;
         _analysisPending = false;
         BackupLayers();
-        if (_paint.HasPaint && _paint.ReadComposite() is { } painted)
-        {
-            _analysisTask = Task.Run(() => _seamAnalysis = SeamAnalyzer.Analyze(painted.ToLuminance(), painted.Width, painted.Height));
-            return;
-        }
-        if (_image is { } image)
-        {
-            _analysisTask = Task.Run(() => _seamAnalysis = SeamAnalyzer.Analyze(image.ToLuminance(), image.Width, image.Height));
-            return;
-        }
-
-        float[] pixels = _noise.ReadPixels();
-        int width = _noise.Width, height = _noise.Height;
-        if (pixels.Length == 0)
-            return;
-        _analysisTask = Task.Run(() => _seamAnalysis = SeamAnalyzer.Analyze(pixels, width, height));
+        RefreshThumbnails();
     }
 
     public void Dispose()
     {
         _watcher?.Dispose();
-        _analysisTask?.Wait();
         lock (_sync)
             ReleaseDeviceObjects();
     }

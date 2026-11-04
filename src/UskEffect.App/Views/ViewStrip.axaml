@@ -8,26 +8,35 @@
       <ui:SegmentedControl x:Name="ViewSegment" DockPanel.Dock="Left" VerticalAlignment="Center" SelectedIndex="0">
         <ListBoxItem Content="{DynamicResource S.View.Rect}" />
         <ListBoxItem Content="{DynamicResource S.View.Polar}" />
-        <ListBoxItem Content="{DynamicResource S.View.Seam}" />
-        <ListBoxItem Content="{DynamicResource S.View.Effect}" />
+        <ListBoxItem Content="{DynamicResource S.View.Tile}" />
+      </ui:SegmentedControl>
+      <!-- プレビューと書き出しの形。書き出しもこれと同じになる -->
+      <ui:SegmentedControl x:Name="OutputSegment" DockPanel.Dock="Left" VerticalAlignment="Center" Margin="8,0,0,0" SelectedIndex="1">
+        <ListBoxItem Content="{DynamicResource S.Output.Alpha}" ToolTip.Tip="{DynamicResource S.Output.AlphaHelp}" />
+        <ListBoxItem Content="{DynamicResource S.Output.Mask}" ToolTip.Tip="{DynamicResource S.Output.MaskHelp}" />
       </ui:SegmentedControl>
       <TextBlock x:Name="ZoomText" DockPanel.Dock="Right" Classes="muted mono" VerticalAlignment="Center" Margin="8,0,0,0" />
-      <Button x:Name="BrushButton" DockPanel.Dock="Right" Classes="btn" Width="{StaticResource Ue.Size.PolarButton}" IsVisible="False"
+      <Button x:Name="BrushButton" DockPanel.Dock="Right" Classes="btn" IsVisible="False"
               Margin="8,0,0,0" VerticalAlignment="Center" HorizontalContentAlignment="Stretch">
-        <Grid ColumnDefinitions="*,Auto">
-          <TextBlock x:Name="BrushSummaryText" Classes="mono" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-          <Path Grid.Column="1" Classes="stroke" Data="{StaticResource Icon.Chevron}" Stroke="{StaticResource Ue.Muted}"
+        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
+          <ui:BrushPreview x:Name="BrushButtonPreview" Height="18" Width="18" VerticalAlignment="Center" />
+          <TextBlock Grid.Column="1" Text="{DynamicResource S.Brush.Settings}" VerticalAlignment="Center" />
+          <Path Grid.Column="2" Classes="stroke" Data="{StaticResource Icon.Chevron}" Stroke="{StaticResource Ue.Muted}"
                 Width="{StaticResource Ue.Size.Chevron}" Height="{StaticResource Ue.Size.Chevron}" VerticalAlignment="Center" />
         </Grid>
         <Button.Flyout>
           <Flyout Placement="BottomEdgeAlignedRight">
-            <StackPanel Width="{StaticResource Ue.Size.PolarPopup}" Spacing="{StaticResource Ue.Gap.Row}">
+            <StackPanel x:Name="BrushPopup" Width="{StaticResource Ue.Size.PolarPopup}" Spacing="{StaticResource Ue.Gap.Row}">
+              <ui:BrushPreview x:Name="BrushLargePreview" Height="{StaticResource Ue.Size.BrushPreview}" ShowBackdrop="True" />
               <ui:SliderField x:Name="BrushSizeField" Label="{DynamicResource S.Brush.Size}" Minimum="1" Maximum="1024" Value="32" Step="1" />
               <ui:SliderField x:Name="BrushHardnessField" Label="{DynamicResource S.Brush.Hardness}" Minimum="0" Maximum="1" Value="0.8" Step="0.01" />
               <ui:SliderField x:Name="BrushOpacityField" Label="{DynamicResource S.Brush.Opacity}" Minimum="0" Maximum="1" Value="1" Step="0.01" />
               <StackPanel x:Name="BrushColorRow" Orientation="Horizontal" Spacing="{StaticResource Ue.Gap.Normal}">
                 <TextBlock Classes="rowLabel" Text="{DynamicResource S.Brush.Color}" />
                 <ui:ColorSwatch x:Name="BrushColorSwatch" Color="#FFFFFF" AutomationProperties.Name="{DynamicResource S.Brush.Color}" />
+                <Button x:Name="BrushInvertButton" Classes="ico" ToolTip.Tip="{DynamicResource S.Brush.InvertColor}" AutomationProperties.Name="{DynamicResource S.Brush.InvertColor}">
+                  <Path Classes="stroke icon" Data="{StaticResource Icon.Invert}" />
+                </Button>
               </StackPanel>
               <DockPanel>
                 <ui:SwitchButton x:Name="BrushWrapSwitch" DockPanel.Dock="Right" VerticalAlignment="Center" IsChecked="True" />
@@ -41,7 +50,6 @@
                 <ui:SwitchButton x:Name="PressureOpacitySwitch" DockPanel.Dock="Right" VerticalAlignment="Center" />
                 <TextBlock Text="{DynamicResource S.Brush.PressureOpacity}" VerticalAlignment="Center" />
               </DockPanel>
-              <Button x:Name="ClearPaintButton" Classes="btn" Content="{DynamicResource S.Paint.ClearMenu}" HorizontalAlignment="Right" />
             </StackPanel>
           </Flyout>
         </Button.Flyout>
@@ -55,7 +63,7 @@
         </Grid>
         <Button.Flyout>
           <Flyout Placement="BottomEdgeAlignedRight">
-            <StackPanel Width="{StaticResource Ue.Size.PolarPopup}" Spacing="{StaticResource Ue.Gap.Row}">
+            <StackPanel x:Name="PolarPopup" Width="{StaticResource Ue.Size.PolarPopup}" Spacing="{StaticResource Ue.Gap.Row}">
               <ui:SliderField x:Name="InnerRadiusField" Label="{DynamicResource S.Polar.Inner}" Minimum="0" Maximum="0.95" Value="0" Step="0.01" />
               <ui:SliderField x:Name="OuterRadiusField" Label="{DynamicResource S.Polar.Outer}" Minimum="0.05" Maximum="1" Value="1" Step="0.01" />
               <ui:SliderField x:Name="RotationField" Label="{DynamicResource S.Polar.Rotation}" Minimum="0" Maximum="360" Value="0" Step="1" ValueFormat="0°" />

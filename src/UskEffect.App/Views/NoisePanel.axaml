@@ -3,36 +3,40 @@
              xmlns:ui="using:UskEffect.App.Controls.Ui"
              x:Class="UskEffect.App.Views.NoisePanel">
   <StackPanel Spacing="{StaticResource Ue.Gap.Row}">
-    <!-- 元画像 (FR-11) -->
-    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{StaticResource Ue.Gap.Normal}">
-      <TextBlock Classes="rowLabel" Text="{DynamicResource S.Source.Label}" />
-      <ui:SegmentedControl x:Name="SourceSegment" Grid.Column="1" SelectedIndex="0">
-        <ListBoxItem Content="{DynamicResource S.Source.Noise}" Padding="2,0" />
-        <ListBoxItem x:Name="SourceImageItem" Content="{DynamicResource S.Source.Image}" Padding="2,0" IsEnabled="False" />
-      </ui:SegmentedControl>
-    </Grid>
-    <TextBlock x:Name="ImageInfoText" Classes="muted" TextTrimming="CharacterEllipsis" />
+    <TextBlock x:Name="TargetText" Classes="muted" TextTrimming="CharacterEllipsis" />
 
     <!-- テクスチャの Tiling / Offset。Unity のマテリアルと同じ -->
+    <StackPanel x:Name="TextureSection" Spacing="{StaticResource Ue.Gap.Row}">
     <ui:SectionHeader x:Name="TextureHeader" Content="{DynamicResource S.Texture.Header}" />
-    <StackPanel Spacing="{StaticResource Ue.Gap.Row}" IsVisible="{Binding #TextureHeader.IsChecked}" x:CompileBindings="False">
+    <StackPanel Spacing="{StaticResource Ue.Gap.Row}" Classes="reveal" IsVisible="{Binding #TextureHeader.IsChecked}" x:CompileBindings="False">
       <ui:Vector2Row x:Name="TilingRow" Label="{DynamicResource S.Texture.Tiling}" LabelX="{DynamicResource S.Texture.X}" LabelY="{DynamicResource S.Texture.Y}"
                      Minimum="0.1" Maximum="16" Step="0.1" ValueFormat="0.0" IsExpandable="True" Value="1" />
       <ui:Vector2Row x:Name="OffsetRow" Label="{DynamicResource S.Texture.Offset}" LabelX="{DynamicResource S.Texture.X}" LabelY="{DynamicResource S.Texture.Y}"
                      Minimum="-1" Maximum="1" Step="0.01" ValueFormat="0.00" Value="0" />
     </StackPanel>
+    </StackPanel>
 
-    <StackPanel x:Name="NoiseControls" Spacing="{StaticResource Ue.Gap.Row}">
+    <Button x:Name="GenerateButton" Classes="btn reveal" Content="{DynamicResource S.Noise.GenerateTexture}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+
+    <StackPanel x:Name="NoiseControls" Classes="reveal" Spacing="{StaticResource Ue.Gap.Row}">
       <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{StaticResource Ue.Gap.Normal}">
         <TextBlock Classes="rowLabel" Text="{DynamicResource S.Noise.Type}" />
-        <ComboBox x:Name="TypeBox" Grid.Column="1" SelectedIndex="0">
-          <ComboBoxItem Content="Perlin" />
-          <ComboBoxItem Content="Worley" />
-          <ComboBoxItem Content="Simplex" />
-          <ComboBoxItem Content="Stripe" />
-        </ComboBox>
+        <Button x:Name="TypeButton" Grid.Column="1" Classes="btn" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                AutomationProperties.Name="{DynamicResource S.Noise.Type}">
+          <DockPanel>
+            <Path DockPanel.Dock="Right" Classes="stroke icon" Data="{StaticResource Icon.Chevron}" VerticalAlignment="Center" />
+            <Image x:Name="TypeSample" Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center" />
+            <TextBlock x:Name="TypeNameText" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+          </DockPanel>
+          <Button.Flyout>
+            <!-- Blender のモディファイア欄のように、グループごとに縦に並べた列を横に並べる -->
+            <Flyout Placement="LeftEdgeAlignedTop">
+              <StackPanel x:Name="TypeMenu" Orientation="Horizontal" Spacing="{StaticResource Ue.Gap.Normal}" />
+            </Flyout>
+          </Button.Flyout>
+        </Button>
       </Grid>
-      <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{StaticResource Ue.Gap.Normal}">
+      <Grid x:Name="FractalRow" ColumnDefinitions="Auto,*" ColumnSpacing="{StaticResource Ue.Gap.Normal}">
         <TextBlock Classes="rowLabel" Text="{DynamicResource S.Noise.Fractal}" />
         <ui:SegmentedControl x:Name="FractalSegment" Grid.Column="1" SelectedIndex="0">
           <ListBoxItem Content="FBM" Padding="2,0" />
@@ -40,7 +44,7 @@
           <ListBoxItem Content="Turbulence" Padding="2,0" />
         </ui:SegmentedControl>
       </Grid>
-      <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{StaticResource Ue.Gap.Normal}">
+      <Grid x:Name="WorleyRow" Classes="reveal" ColumnDefinitions="Auto,*" ColumnSpacing="{StaticResource Ue.Gap.Normal}">
         <TextBlock Classes="rowLabel" Text="{DynamicResource S.Noise.Worley}" />
         <ui:SegmentedControl x:Name="WorleySegment" Grid.Column="1" SelectedIndex="0">
           <ListBoxItem Content="F1" Padding="2,0" />
@@ -48,7 +52,7 @@
           <ListBoxItem Content="F2-F1" Padding="2,0" />
         </ui:SegmentedControl>
       </Grid>
-      <StackPanel x:Name="StripeControls" Spacing="{StaticResource Ue.Gap.Row}">
+      <StackPanel x:Name="StripeControls" Classes="reveal" Spacing="{StaticResource Ue.Gap.Row}">
         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{StaticResource Ue.Gap.Normal}">
           <TextBlock Classes="rowLabel" Text="{DynamicResource S.Noise.StripeDirection}" />
           <ui:SegmentedControl x:Name="StripeDirectionSegment" Grid.Column="1" SelectedIndex="0">
@@ -60,7 +64,7 @@
         <ui:SliderField x:Name="StripeWidthField" Label="{DynamicResource S.Noise.StripeWidth}" Minimum="0.02" Maximum="0.98" Value="0.5" Step="0.01" />
         <ui:SliderField x:Name="StripeSoftnessField" Label="{DynamicResource S.Noise.StripeSoftness}" Minimum="0" Maximum="1" Value="0.1" Step="0.01" />
       </StackPanel>
-      <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{StaticResource Ue.Gap.Normal}">
+      <Grid x:Name="SeamRow" ColumnDefinitions="Auto,*" ColumnSpacing="{StaticResource Ue.Gap.Normal}">
         <TextBlock Classes="rowLabel" Text="{DynamicResource S.Noise.Seamless}" />
         <ui:SegmentedControl x:Name="SeamSegment" Grid.Column="1" SelectedIndex="3">
           <ListBoxItem Content="OFF" Padding="2,0" />
@@ -70,7 +74,7 @@
         </ui:SegmentedControl>
       </Grid>
 
-      <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="{StaticResource Ue.Gap.Normal}">
+      <Grid x:Name="SeedRow" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="{StaticResource Ue.Gap.Normal}">
         <TextBlock Classes="rowLabel" Text="{DynamicResource S.Noise.Seed}" />
         <ui:NumberField x:Name="SeedField" Grid.Column="1" ShowSteppers="False" Minimum="0" Maximum="999999" Value="1" AutomationProperties.Name="{DynamicResource S.Noise.Seed}" />
         <Button x:Name="RandomSeedButton" Grid.Column="2" Classes="ico" Height="{StaticResource Ue.Size.Field}" Background="{StaticResource Ue.Raised}"
@@ -78,33 +82,55 @@
           <Path Classes="stroke icon" Data="{StaticResource Icon.Dice}" />
         </Button>
       </Grid>
-      <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{StaticResource Ue.Gap.Normal}">
-        <TextBlock Classes="rowLabel" Text="{DynamicResource S.Noise.Resolution}" TextWrapping="Wrap" />
-        <ComboBox x:Name="ResolutionBox" Grid.Column="1" SelectedIndex="1">
-          <ComboBoxItem Content="256" />
-          <ComboBoxItem Content="512" />
-          <ComboBoxItem Content="1024" />
-          <ComboBoxItem Content="2048" />
-        </ComboBox>
-      </Grid>
 
+      <StackPanel x:Name="PatternSection" Classes="reveal" Spacing="{StaticResource Ue.Gap.Row}">
+        <ui:SectionHeader x:Name="PatternHeader" Content="{DynamicResource S.Shape.Header}" />
+        <StackPanel Spacing="{StaticResource Ue.Gap.Row}" Classes="reveal" IsVisible="{Binding #PatternHeader.IsChecked}" x:CompileBindings="False">
+          <ui:Vector2Row x:Name="CenterRow" Label="{DynamicResource S.Shape.Center}" LabelX="{DynamicResource S.Texture.X}" LabelY="{DynamicResource S.Texture.Y}"
+                         Minimum="0" Maximum="1" Step="0.01" ValueFormat="0.00" Value="0.5" />
+          <DockPanel x:Name="SolidColorRow" MinHeight="{StaticResource Ue.Size.Field}">
+            <ui:ColorSwatch x:Name="SolidColorSwatch" DockPanel.Dock="Right" Color="#FFFFFF" VerticalAlignment="Center" AutomationProperties.Name="{DynamicResource S.Shape.Color}" />
+            <TextBlock Text="{DynamicResource S.Shape.Color}" VerticalAlignment="Center" />
+          </DockPanel>
+          <ui:SliderField x:Name="AngleField" Label="{DynamicResource S.Shape.Angle}" Minimum="0" Maximum="360" Value="0" Step="1" ValueFormat="0°" />
+          <ui:SliderField x:Name="SizeField" Label="{DynamicResource S.Shape.Size}" Minimum="0.01" Maximum="1" Value="0.4" Step="0.01" />
+          <ui:SliderField x:Name="ThicknessField" Label="{DynamicResource S.Shape.Thickness}" Minimum="0" Maximum="1" Value="0.08" Step="0.01" />
+          <ui:SliderField x:Name="SoftnessField" Label="{DynamicResource S.Shape.Softness}" Minimum="0" Maximum="0.5" Value="0.01" Step="0.01" />
+          <ui:SliderField x:Name="CountField" Label="{DynamicResource S.Shape.Count}" Minimum="1" Maximum="64" Value="8" Step="1" ValueFormat="0" />
+          <ui:SliderField x:Name="FalloffField" Label="{DynamicResource S.Shape.Falloff}" Minimum="0.1" Maximum="8" Value="1" Step="0.1" ValueFormat="0.0" />
+          <ui:SliderField x:Name="AmountField" Minimum="0" Maximum="1" Value="0.5" Step="0.01" />
+          <ui:SliderField x:Name="AspectField" Label="{DynamicResource S.Shape.Aspect}" Minimum="0.1" Maximum="4" Value="1" Step="0.01" />
+          <ui:SliderField x:Name="TwistField" Label="{DynamicResource S.Shape.Twist}" Minimum="-8" Maximum="8" Value="2" Step="0.1" ValueFormat="0.0" />
+          <ui:SliderField x:Name="Stop0Field" Label="{DynamicResource S.Shape.Stop0}" Minimum="0" Maximum="1" Value="0" Step="0.01" />
+          <ui:SliderField x:Name="Stop1Field" Label="{DynamicResource S.Shape.Stop1}" Minimum="0" Maximum="1" Value="1" Step="0.01" />
+          <ui:SliderField x:Name="Stop2Field" Label="{DynamicResource S.Shape.Stop2}" Minimum="0" Maximum="1" Value="0.3" Step="0.01" />
+          <ui:SliderField x:Name="Stop3Field" Label="{DynamicResource S.Shape.Stop3}" Minimum="0" Maximum="1" Value="1" Step="0.01" />
+          <ui:Vector2Row x:Name="P0Row" Label="{DynamicResource S.Shape.P0}" LabelX="{DynamicResource S.Texture.X}" LabelY="{DynamicResource S.Texture.Y}"
+                         Minimum="0" Maximum="1" Step="0.01" ValueFormat="0.00" />
+          <ui:Vector2Row x:Name="P1Row" Label="{DynamicResource S.Shape.P1}" LabelX="{DynamicResource S.Texture.X}" LabelY="{DynamicResource S.Texture.Y}"
+                         Minimum="0" Maximum="1" Step="0.01" ValueFormat="0.00" />
+          <ui:Vector2Row x:Name="P2Row" Label="{DynamicResource S.Shape.P2}" LabelX="{DynamicResource S.Texture.X}" LabelY="{DynamicResource S.Texture.Y}"
+                         Minimum="0" Maximum="1" Step="0.01" ValueFormat="0.00" />
+        </StackPanel>
+      </StackPanel>
+
+      <StackPanel x:Name="ShapeSection" Classes="reveal" Spacing="{StaticResource Ue.Gap.Row}">
       <ui:SectionHeader x:Name="ShapeHeader" Content="{DynamicResource S.Noise.Shape}" />
-      <StackPanel Spacing="{StaticResource Ue.Gap.Row}" IsVisible="{Binding #ShapeHeader.IsChecked}" x:CompileBindings="False">
+      <StackPanel Spacing="{StaticResource Ue.Gap.Row}" Classes="reveal" IsVisible="{Binding #ShapeHeader.IsChecked}" x:CompileBindings="False">
         <ui:SliderField x:Name="FrequencyField" Label="{DynamicResource S.Noise.Frequency}" Minimum="1" Maximum="32" Value="4" Step="1" ValueFormat="0" IsExpandable="True" />
         <ui:SliderField x:Name="OctavesField" Label="{DynamicResource S.Noise.Octaves}" Minimum="1" Maximum="8" Value="5" Step="1" ValueFormat="0" />
         <ui:SliderField x:Name="PersistenceField" Label="{DynamicResource S.Noise.Persistence}" Minimum="0" Maximum="1" Value="0.5" Step="0.01" />
         <ui:SliderField x:Name="LacunarityField" Label="{DynamicResource S.Noise.Lacunarity}" Minimum="2" Maximum="4" Value="2" Step="1" ValueFormat="0" />
         <ui:SliderField x:Name="WarpField" Label="{DynamicResource S.Noise.Warp}" HelpText="{DynamicResource S.Noise.WarpHelp}" Minimum="0" Maximum="0.5" Value="0" Step="0.01" IsExpandable="True" />
       </StackPanel>
+      </StackPanel>
 
+      <StackPanel x:Name="ToneSection" Spacing="{StaticResource Ue.Gap.Row}">
       <ui:SectionHeader x:Name="ToneHeader" Content="{DynamicResource S.Noise.Tone}" />
-      <StackPanel Spacing="{StaticResource Ue.Gap.Row}" IsVisible="{Binding #ToneHeader.IsChecked}" x:CompileBindings="False">
+      <StackPanel Spacing="{StaticResource Ue.Gap.Row}" Classes="reveal" IsVisible="{Binding #ToneHeader.IsChecked}" x:CompileBindings="False">
         <ui:SliderField x:Name="ContrastField" Label="{DynamicResource S.Noise.Contrast}" Minimum="0" Maximum="3" Value="1" Step="0.01" IsExpandable="True" />
         <ui:SliderField x:Name="BrightnessField" Label="{DynamicResource S.Noise.Brightness}" Minimum="-1" Maximum="1" Value="0" Step="0.01" />
-        <DockPanel MinHeight="{StaticResource Ue.Size.Field}">
-          <ui:SwitchButton x:Name="InvertSwitch" DockPanel.Dock="Right" VerticalAlignment="Center" AutomationProperties.Name="{DynamicResource S.Noise.Invert}" />
-          <TextBlock Text="{DynamicResource S.Noise.Invert}" VerticalAlignment="Center" />
-        </DockPanel>
+      </StackPanel>
       </StackPanel>
     </StackPanel>
   </StackPanel>

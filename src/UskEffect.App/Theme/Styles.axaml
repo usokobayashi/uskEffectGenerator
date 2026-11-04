@@ -113,6 +113,11 @@
   </Style>
   <Style Selector="Border.layer">
     <Setter Property="Background" Value="{StaticResource Ue.Raised}" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="{StaticResource Ue.Motion.Fast}" Easing="{StaticResource Ue.Ease}" />
+      </Transitions>
+    </Setter>
     <Setter Property="CornerRadius" Value="{StaticResource Ue.Radius}" />
     <Setter Property="Height" Value="{StaticResource Ue.Size.Layer}" />
     <Setter Property="Padding" Value="6,0" />

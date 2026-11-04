@@ -11,7 +11,6 @@
     <DockPanel>
       <views:TopBar x:Name="Top" DockPanel.Dock="Top" />
       <views:StatusBar x:Name="Status" DockPanel.Dock="Bottom" />
-      <views:TimelineBar x:Name="Timeline" DockPanel.Dock="Bottom" />
 
       <views:ToolRail x:Name="Rail" DockPanel.Dock="Left" />
 
@@ -19,25 +18,9 @@
       <Border x:Name="RightPanel" DockPanel.Dock="Right" Width="{StaticResource Ue.Size.RightPanel}" Background="{StaticResource Ue.Panel}"
               BorderBrush="{StaticResource Ue.Line}" BorderThickness="{StaticResource Ue.Line.Left}">
         <DockPanel>
-          <Border DockPanel.Dock="Top" Padding="{StaticResource Ue.Pad.Tabs}">
-            <ui:SegmentedControl x:Name="TabSegment" SelectedIndex="0">
-              <ListBoxItem Content="{DynamicResource S.Tab.Noise}" Padding="2,0" />
-              <ListBoxItem Padding="2,0">
-                <StackPanel Orientation="Horizontal" Spacing="3">
-                  <TextBlock Text="{DynamicResource S.Tab.Seam}" />
-                  <TextBlock x:Name="SeamMarkText" FontWeight="Bold" />
-                </StackPanel>
-              </ListBoxItem>
-              <ListBoxItem Content="{DynamicResource S.Tab.Effect}" Padding="2,0" />
-              <ListBoxItem Content="{DynamicResource S.Tab.Layer}" Padding="2,0" />
-            </ui:SegmentedControl>
-          </Border>
           <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
             <Panel Margin="{StaticResource Ue.Pad.Body}">
               <views:NoisePanel x:Name="NoiseTab" />
-              <views:SeamPanel x:Name="SeamTab" IsVisible="False" />
-              <views:EffectPanel x:Name="EffectTab" IsVisible="False" />
-              <views:LayerPanel x:Name="LayerTab" IsVisible="False" />
             </Panel>
           </ScrollViewer>
         </DockPanel>
@@ -51,5 +34,12 @@
         </Border>
       </DockPanel>
     </DockPanel>
+
+    <!-- 出力の完了。キャンバスの上には重ねられないので、上部のバーの上に出す -->
+    <Border x:Name="ExportBanner" Classes="reveal" IsVisible="False" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,4,0,0" Padding="10,4"
+            MaxWidth="640" Background="{StaticResource Ue.Fill}" BorderBrush="{StaticResource Ue.Accent}" BorderThickness="{StaticResource Ue.Line.All}"
+            CornerRadius="{StaticResource Ue.Radius}" Cursor="Hand">
+      <TextBlock x:Name="ExportBannerText" TextTrimming="CharacterEllipsis" />
+    </Border>
   </Panel>
 </Window>

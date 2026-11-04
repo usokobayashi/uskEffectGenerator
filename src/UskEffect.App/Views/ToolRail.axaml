@@ -1,9 +1,25 @@
-<!-- 左: 道具。ペイントモードのときだけ使える。まだ機能がない道具は無効の見た目で場所を確保する -->
+<!-- 左: 道具。ペイントモードのときだけ使える。まだ機能がない道具は無効の見た目で場所を確保する。一番下は今のレイヤー -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:views="using:UskEffect.App.Views"
              x:Class="UskEffect.App.Views.ToolRail">
   <Border Width="{StaticResource Ue.Size.Rail}" Background="{StaticResource Ue.Panel}" BorderBrush="{StaticResource Ue.Line}"
           BorderThickness="{StaticResource Ue.Line.Right}" Padding="0,8">
+    <DockPanel>
+    <StackPanel DockPanel.Dock="Bottom" HorizontalAlignment="Center" Spacing="{StaticResource Ue.Gap.Tight}">
+      <Button x:Name="LayerButton" Classes="tool" AutomationProperties.Name="{DynamicResource S.Layer.Open}">
+        <Panel>
+          <Path x:Name="LayerIcon" Classes="stroke icon" Data="{StaticResource Icon.Layers}" />
+          <Image x:Name="LayerThumb" Width="{StaticResource Ue.Size.LayerThumb}" Height="{StaticResource Ue.Size.LayerThumb}" IsVisible="False" />
+        </Panel>
+        <Button.Flyout>
+          <Flyout Placement="RightEdgeAlignedBottom">
+            <views:LayerPanel x:Name="LayerPopup" />
+          </Flyout>
+        </Button.Flyout>
+      </Button>
+      <TextBlock x:Name="LayerNumberText" Classes="muted mono" HorizontalAlignment="Center" />
+    </StackPanel>
     <StackPanel HorizontalAlignment="Center" Spacing="{StaticResource Ue.Gap.Tight}">
       <Button x:Name="BrushToolButton" Classes="tool" IsEnabled="False" ToolTip.Tip="{DynamicResource S.Tool.Brush}" AutomationProperties.Name="{DynamicResource S.Tool.Brush}"><Path Classes="stroke icon" Data="{StaticResource Icon.Brush}" /></Button>
       <Button x:Name="EraserToolButton" Classes="tool" IsEnabled="False" ToolTip.Tip="{DynamicResource S.Tool.Eraser}" AutomationProperties.Name="{DynamicResource S.Tool.Eraser}"><Path Classes="stroke icon" Data="{StaticResource Icon.Eraser}" /></Button>
@@ -13,5 +29,6 @@
       <Button Classes="tool" IsEnabled="False" ToolTip.Tip="{DynamicResource S.Tool.Fill}" AutomationProperties.Name="{DynamicResource S.Tool.Fill}"><Path Classes="stroke icon" Data="{StaticResource Icon.Fill}" /></Button>
       <Button Classes="tool" IsEnabled="False" ToolTip.Tip="{DynamicResource S.Tool.Move}" AutomationProperties.Name="{DynamicResource S.Tool.Move}"><Path Classes="stroke icon" Data="{StaticResource Icon.Move}" /></Button>
     </StackPanel>
+    </DockPanel>
   </Border>
 </UserControl>
