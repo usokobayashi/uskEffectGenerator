@@ -476,6 +476,57 @@ public sealed class UiTests(UiSession ui) : IClassFixture<UiSession>
     });
 
     [Fact]
+    public Task OpenFile_LoadsProject_ThenAddsImageWithoutReplacingProject() => ui.Run(() =>
+    {
+        string dir = Path.Combine(Path.GetTempPath(), $"uskfx-open-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        try
+        {
+            string projectPath = Path.Combine(dir, "a.USKFX");
+            ProjectFile.Save(projectPath, new ProjectDocument { Noise = new NoiseSettings { Seed = 1234 } });
+            string imagePath = Path.Combine(dir, "b.tga");
+            File.WriteAllBytes(imagePath, Tga1x1());
+
+            var window = Open();
+            WaitFor(window.OpenFileAsync(projectPath));
+            Assert.Equal(1234u, window.BuildDocument().Noise.Seed);
+            Assert.False(window.NoiseTab.UseImage);
+
+            WaitFor(window.OpenFileAsync(imagePath));
+            var document = window.BuildDocument();
+            Assert.True(window.NoiseTab.UseImage);
+            Assert.Equal("b.tga", document.Source.ImageName);
+            Assert.Equal(1234u, document.Noise.Seed);
+            Assert.StartsWith("a.USKFX", window.Title);
+
+            // 未保存の変更があっても、画像なら保存の確認を出さずに読み込む
+            Assert.Contains("*", window.Title);
+            WaitFor(window.OpenFileAsync(imagePath));
+            CloseWindow(window);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    });
+
+    private static void WaitFor(Task task)
+    {
+        var limit = DateTime.UtcNow.AddSeconds(10);
+        while (!task.IsCompleted)
+        {
+            Assert.True(DateTime.UtcNow < limit, "開く処理が終わりません");
+            Dispatcher.UIThread.RunJobs();
+            Thread.Sleep(1);
+        }
+        task.GetAwaiter().GetResult();
+        Settle();
+    }
+
+    // 1×1、24bit、無圧縮の TGA
+    private static byte[] Tga1x1() => [0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 24, 0, 10, 20, 30];
+
+    [Fact]
     public Task Vector2Link_KeepsBothValuesTheSame() => ui.Run(() =>
     {
         var window = Open();

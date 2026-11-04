@@ -28,13 +28,11 @@ public partial class MainWindow
     private void SetUpProjectCommands()
     {
         Top.NewMenuItem.Click += async (_, _) => await NewProjectAsync();
-        Top.OpenMenuItem.Click += async (_, _) => await OpenProjectAsync();
-        Top.OpenButton.Click += async (_, _) => await OpenProjectAsync();
+        Top.OpenMenuItem.Click += async (_, _) => await OpenAsync();
+        Top.OpenButton.Click += async (_, _) => await OpenAsync();
         Top.SaveMenuItem.Click += async (_, _) => await SaveProjectAsync(saveAs: false);
         Top.SaveButton.Click += async (_, _) => await SaveProjectAsync(saveAs: false);
         Top.SaveAsMenuItem.Click += async (_, _) => await SaveProjectAsync(saveAs: true);
-        Top.LoadImageMenuItem.Click += async (_, _) => await LoadImageAsync();
-        NoiseTab.LoadImageButton.Click += async (_, _) => await LoadImageAsync();
         Top.ExportMenuItem.Click += async (_, _) => await ExportImageAsync();
         Top.ExportRunButton.Click += async (_, _) =>
         {
@@ -115,18 +113,40 @@ public partial class MainWindow
     private static FilePickerFileType ImageFileType =>
         new(Loc.T("S.FileType.Images")) { Patterns = ImageLoader.Extensions.Select(e => "*" + e).ToArray() };
 
-    private async Task LoadImageAsync()
+    private static FilePickerFileType OpenableFileType =>
+        new(Loc.T("S.FileType.Openable")) { Patterns = [.. ProjectFileType.Patterns!, .. ImageFileType.Patterns!] };
+
+    private async Task OpenAsync()
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = Loc.T("S.Source.LoadTitle"),
+            Title = Loc.T("S.Project.OpenTitle"),
             AllowMultiple = false,
-            FileTypeFilter = [ImageFileType],
+            FileTypeFilter = [OpenableFileType, ProjectFileType, ImageFileType],
         });
         string? path = files.Count > 0 ? files[0].TryGetLocalPath() : null;
         if (path is null)
             return;
 
+        await OpenFileAsync(path);
+    }
+
+    /// <summary>プロジェクトは今の内容と置き換え、画像は今のプロジェクトの元画像にする。</summary>
+    internal async Task OpenFileAsync(string path)
+    {
+        if (ProjectFile.IsProjectPath(path))
+        {
+            // 画像なら今の内容を残すので、確認はプロジェクトを開くときだけ出す
+            if (await ConfirmDiscardOrSaveAsync())
+                await OpenProjectFileAsync(path);
+            return;
+        }
+
+        await LoadImageFileAsync(path);
+    }
+
+    private async Task LoadImageFileAsync(string path)
+    {
         try
         {
             // 大きな画像でも画面を止めない
@@ -164,24 +184,6 @@ public partial class MainWindow
         _projectPath = null;
         _dirty = false;
         UpdateTitle();
-    }
-
-    private async Task OpenProjectAsync()
-    {
-        if (!await ConfirmDiscardOrSaveAsync())
-            return;
-
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = Loc.T("S.Project.OpenTitle"),
-            AllowMultiple = false,
-            FileTypeFilter = [ProjectFileType],
-        });
-        string? path = files.Count > 0 ? files[0].TryGetLocalPath() : null;
-        if (path is null)
-            return;
-
-        await OpenProjectFileAsync(path);
     }
 
     private async Task OpenProjectFileAsync(string path)

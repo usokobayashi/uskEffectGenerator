@@ -14,7 +14,6 @@
             <MenuItem x:Name="SaveMenuItem" Header="{DynamicResource S.Menu.Save}" InputGesture="Ctrl+S" HotKey="Ctrl+S" />
             <MenuItem x:Name="SaveAsMenuItem" Header="{DynamicResource S.Menu.SaveAs}" InputGesture="Ctrl+Shift+S" HotKey="Ctrl+Shift+S" />
             <Separator />
-            <MenuItem x:Name="LoadImageMenuItem" Header="{DynamicResource S.Menu.LoadImage}" InputGesture="Ctrl+I" HotKey="Ctrl+I" />
             <MenuItem x:Name="ExportMenuItem" Header="{DynamicResource S.Menu.Export}" InputGesture="Ctrl+E" HotKey="Ctrl+E" />
             <Separator />
             <MenuItem x:Name="ExitMenuItem" Header="{DynamicResource S.Menu.Exit}" />

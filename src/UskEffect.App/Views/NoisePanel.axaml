@@ -4,13 +4,12 @@
              x:Class="UskEffect.App.Views.NoisePanel">
   <StackPanel Spacing="{StaticResource Ue.Gap.Row}">
     <!-- 元画像 (FR-11) -->
-    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="{StaticResource Ue.Gap.Normal}">
+    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{StaticResource Ue.Gap.Normal}">
       <TextBlock Classes="rowLabel" Text="{DynamicResource S.Source.Label}" />
       <ui:SegmentedControl x:Name="SourceSegment" Grid.Column="1" SelectedIndex="0">
         <ListBoxItem Content="{DynamicResource S.Source.Noise}" Padding="2,0" />
         <ListBoxItem x:Name="SourceImageItem" Content="{DynamicResource S.Source.Image}" Padding="2,0" IsEnabled="False" />
       </ui:SegmentedControl>
-      <Button x:Name="LoadImageButton" Grid.Column="2" Classes="btn" Content="{DynamicResource S.Source.Load}" />
     </Grid>
     <TextBlock x:Name="ImageInfoText" Classes="muted" TextTrimming="CharacterEllipsis" />
 

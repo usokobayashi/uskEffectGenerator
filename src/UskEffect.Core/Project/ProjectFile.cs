@@ -19,6 +19,9 @@ public static class ProjectFile
 {
     public const string Extension = ".uskfx";
 
+    public static bool IsProjectPath(string path) =>
+        string.Equals(Path.GetExtension(path), Extension, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>形式を変えたら上げる。読込時、これより新しい形式は拒否する。</summary>
     /// 1: 設定のみ。2: 読み込んだ画像を images/source.png に保存。
     public const int CurrentFormatVersion = 2;

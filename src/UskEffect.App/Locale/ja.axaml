@@ -11,7 +11,6 @@
   <x:String x:Key="S.Menu.Save">保存(_S)</x:String>
   <x:String x:Key="S.Menu.SaveAs">名前を付けて保存(_A)...</x:String>
   <x:String x:Key="S.Menu.Export">画像を書き出し(_E)...</x:String>
-  <x:String x:Key="S.Menu.LoadImage">画像を読み込み(_I)...</x:String>
   <x:String x:Key="S.Menu.ZoomFit">全体を表示(_F)</x:String>
   <x:String x:Key="S.Menu.Zoom100">100% で表示(_1)</x:String>
   <x:String x:Key="S.Menu.ResetRotation">回転を戻す(_R)</x:String>
@@ -47,12 +46,13 @@
   <x:String x:Key="S.Export.Failed">書き出せません</x:String>
   <x:String x:Key="S.Export.Gray16PngOnly">グレースケール 16bit は PNG でのみ書き出せます。</x:String>
   <x:String x:Key="S.Export.DefaultName">noise</x:String>
+  <x:String x:Key="S.FileType.Openable">プロジェクトと画像</x:String>
   <x:String x:Key="S.FileType.Project">uskEffect プロジェクト</x:String>
   <x:String x:Key="S.FileType.Png">PNG 画像</x:String>
   <x:String x:Key="S.FileType.Tga">TGA 画像</x:String>
 
   <!-- プロジェクト -->
-  <x:String x:Key="S.Project.OpenTitle">プロジェクトを開く</x:String>
+  <x:String x:Key="S.Project.OpenTitle">開く</x:String>
   <x:String x:Key="S.Project.SaveTitle">プロジェクトを保存</x:String>
   <x:String x:Key="S.Project.OpenFailed">開けません</x:String>
   <x:String x:Key="S.Project.SaveFailed">保存できません</x:String>
@@ -97,10 +97,8 @@
   <x:String x:Key="S.Source.Label">元画像</x:String>
   <x:String x:Key="S.Source.Noise">ノイズ</x:String>
   <x:String x:Key="S.Source.Image">画像</x:String>
-  <x:String x:Key="S.Source.Load">読み込み...</x:String>
-  <x:String x:Key="S.Source.None">画像は読み込まれていません</x:String>
+  <x:String x:Key="S.Source.None">「開く」で画像を読み込めます</x:String>
   <x:String x:Key="S.Source.Info">{0}（{1}×{2}）</x:String>
-  <x:String x:Key="S.Source.LoadTitle">画像を読み込み</x:String>
   <x:String x:Key="S.Source.LoadFailed">画像を読み込めません</x:String>
   <x:String x:Key="S.FileType.Images">画像（PNG・TGA・JPG・BMP）</x:String>
 
