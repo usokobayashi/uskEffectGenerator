@@ -510,6 +510,35 @@ public sealed class UiTests(UiSession ui) : IClassFixture<UiSession>
         }
     });
 
+    [Fact]
+    public Task PaintMode_EnablesTools_AndShowsBrushSettings() => ui.Run(() =>
+    {
+        var window = Open();
+        Assert.False(window.Rail.BrushToolButton.IsEnabled);
+        Assert.False(window.Strip.BrushButton.IsVisible);
+
+        window.Strip.Mode = UskEffect.Graphics.PreviewMode.Polar;
+        window.Top.ModeSegment.SelectedIndex = 1;
+        Settle();
+
+        Assert.True(window.Rail.BrushToolButton.IsEnabled);
+        Assert.True(window.Strip.BrushButton.IsVisible);
+        Assert.Equal(UskEffect.Graphics.PreviewMode.Rect, window.Strip.Mode);
+
+        window.Rail.EraserToolButton.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Settle();
+        Assert.Equal(UskEffect.Graphics.Painting.PaintTool.Eraser, window.CurrentBrush.Tool);
+        Assert.False(window.Strip.BrushColorRow.IsVisible);
+
+        window.Strip.BrushSize = 100000;
+        Assert.Equal(UskEffect.Graphics.Painting.BrushSettings.MaxSize, window.CurrentBrush.Size);
+
+        window.Top.ModeSegment.SelectedIndex = 0;
+        Settle();
+        Assert.False(window.Rail.BrushToolButton.IsEnabled);
+        CloseWindow(window);
+    });
+
     private static void WaitFor(Task task)
     {
         var limit = DateTime.UtcNow.AddSeconds(10);

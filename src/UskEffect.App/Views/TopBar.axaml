@@ -72,7 +72,7 @@
       <ui:SegmentedControl x:Name="ModeSegment" DockPanel.Dock="Right" Width="{StaticResource Ue.Size.ModeSegment}"
                            VerticalAlignment="Center" SelectedIndex="0">
         <ListBoxItem Content="{DynamicResource S.Mode.Generate}" />
-        <ListBoxItem Content="{DynamicResource S.Mode.Paint}" IsEnabled="False" ToolTip.Tip="{DynamicResource S.Common.NotYet}" />
+        <ListBoxItem Content="{DynamicResource S.Mode.Paint}" />
       </ui:SegmentedControl>
 
       <TextBlock x:Name="ProjectNameText" DockPanel.Dock="Right" Classes="muted" VerticalAlignment="Center"

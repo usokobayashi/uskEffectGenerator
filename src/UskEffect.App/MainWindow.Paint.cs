@@ -1,0 +1,96 @@
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using UskEffect.App.Controls;
+using UskEffect.App.Locale;
+using UskEffect.Graphics;
+using UskEffect.Graphics.Painting;
+
+namespace UskEffect.App;
+
+/// <summary>生成／ペイントの切り替えと、ブラシ・消しゴム・ぼかし (FR-14)。</summary>
+public partial class MainWindow
+{
+    private const double BrushSizeStep = 1.25;
+
+    private CanvasPainter? _painter;
+
+    private bool IsPaintMode => Top.ModeSegment.SelectedIndex == 1;
+
+    // 極座標とシームの表示は矩形と画素の対応が違うので、矩形でだけ描ける
+    private bool CanPaint => IsPaintMode && Strip.Mode == PreviewMode.Rect;
+
+    internal BrushSettings CurrentBrush => Strip.ReadBrush(Rail.Tool);
+
+    private void SetUpPaint()
+    {
+        _painter = new CanvasPainter(Viewport, _engine!, () => CurrentBrush, () => CanPaint, MarkDirty);
+
+        Top.ModeSegment.SelectionChanged += (_, _) => ApplyPaintMode();
+        Rail.ToolChanged += () => Strip.Tool = Rail.Tool;
+        Strip.ClearPaintRequested += async () => await ClearPaintAsync();
+        Strip.Changed += ShowPaintAvailability;
+        AddHandler(KeyDownEvent, OnPaintKeyDown, RoutingStrategies.Tunnel);
+        ApplyPaintMode();
+    }
+
+    private void ApplyPaintMode()
+    {
+        bool paint = IsPaintMode;
+        Rail.IsPaintMode = paint;
+        Strip.ShowBrushSettings = paint;
+        if (paint)
+            Strip.Mode = PreviewMode.Rect;
+        else
+            _painter?.HideCursor();
+        if (!paint && _engine is not null)
+            _engine.Cursor = null;
+    }
+
+    private void ShowPaintAvailability()
+    {
+        if (IsPaintMode && Strip.Mode != PreviewMode.Rect)
+        {
+            Status.ShowMessage(Loc.T("S.Paint.RectOnly"));
+            if (_engine is not null)
+                _engine.Cursor = null;
+        }
+    }
+
+    private async Task ClearPaintAsync()
+    {
+        if (_engine is null || !await Dialogs.ConfirmAsync(this, Loc.T("S.Paint.ClearTitle"), Loc.T("S.Paint.ClearBody"), Loc.T("S.Paint.Clear")))
+            return;
+        _engine.ClearPaint();
+        MarkDirty();
+    }
+
+    // 操作の参考は CLIP STUDIO PAINT。B ブラシ、E 消しゴム、J ぼかし (色混ぜ)、[ ] で大きさ
+    private void OnPaintKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (!IsPaintMode || e.KeyModifiers != KeyModifiers.None || FocusManager?.GetFocusedElement() is TextBox)
+            return;
+
+        switch (e.Key)
+        {
+            case Key.B:
+                Rail.Tool = PaintTool.Brush;
+                break;
+            case Key.E:
+                Rail.Tool = PaintTool.Eraser;
+                break;
+            case Key.J:
+                Rail.Tool = PaintTool.Blur;
+                break;
+            case Key.OemOpenBrackets:
+                Strip.BrushSize /= BrushSizeStep;
+                break;
+            case Key.OemCloseBrackets:
+                Strip.BrushSize *= BrushSizeStep;
+                break;
+            default:
+                return;
+        }
+        e.Handled = true;
+    }
+}

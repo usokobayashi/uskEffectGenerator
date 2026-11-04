@@ -32,6 +32,7 @@ internal static class Win32
     private const uint WM_MBUTTONDOWN = 0x0207;
     private const uint WM_MBUTTONUP = 0x0208;
     private const uint WM_MOUSEWHEEL = 0x020A;
+    private const int VK_LBUTTON = 0x01;
     private const int VK_SHIFT = 0x10;
     private const int VK_CONTROL = 0x11;
     private const int VK_SPACE = 0x20;
@@ -62,6 +63,12 @@ internal static class Win32
     public static bool IsSpaceDown() => GetKeyState(VK_SPACE) < 0;
     public static bool IsShiftDown() => GetKeyState(VK_SHIFT) < 0;
     public static bool IsControlDown() => GetKeyState(VK_CONTROL) < 0;
+    public static bool IsLeftButtonDown() => GetKeyState(VK_LBUTTON) < 0;
+
+    /// <summary>ストロークの間、窓の外でもマウスを受け取る。カーソルの形は変えない。</summary>
+    public static void BeginCapture(IntPtr hwnd) => SetCapture(hwnd);
+
+    public static void EndCapture() => ReleaseCapture();
 
     /// <summary>ドラッグの間、窓の外でもマウスを受け取る。</summary>
     public static void BeginDrag(IntPtr hwnd)

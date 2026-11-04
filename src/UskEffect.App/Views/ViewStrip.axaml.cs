@@ -1,7 +1,9 @@
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Media;
 using UskEffect.App.Locale;
 using UskEffect.Graphics;
+using UskEffect.Graphics.Painting;
 
 namespace UskEffect.App.Views;
 
@@ -13,9 +15,22 @@ public partial class ViewStrip : UserControl
     /// <summary>表示か極座標の設定が変わったときに発生する。</summary>
     public event Action? Changed;
 
+    /// <summary>「描いた内容を消去」を押したときに発生する。</summary>
+    public event Action? ClearPaintRequested;
+
+    private PaintTool _tool = PaintTool.Brush;
+
     public ViewStrip()
     {
         InitializeComponent();
+
+        BrushSizeField.ValueChanged += (_, _) => UpdateBrushSummary();
+        ClearPaintButton.Click += (_, _) =>
+        {
+            BrushButton.Flyout?.Hide();
+            ClearPaintRequested?.Invoke();
+        };
+        UpdateBrushSummary();
 
         ViewSegment.SelectionChanged += (_, _) => Changed?.Invoke();
         foreach (RangeBase field in new RangeBase[] { InnerRadiusField, OuterRadiusField, RotationField })
@@ -55,6 +70,53 @@ public partial class ViewStrip : UserControl
     public bool ShowPolarSettings
     {
         set => PolarButton.IsVisible = value;
+    }
+
+    /// <summary>ブラシの設定ボタンを出すか。</summary>
+    public bool ShowBrushSettings
+    {
+        set => BrushButton.IsVisible = value;
+    }
+
+    /// <summary>選んでいる道具。色の欄はブラシのときだけ出す。</summary>
+    public PaintTool Tool
+    {
+        set
+        {
+            _tool = value;
+            BrushColorRow.IsVisible = value == PaintTool.Brush;
+            UpdateBrushSummary();
+        }
+    }
+
+    public double BrushSize
+    {
+        get => BrushSizeField.Value;
+        set => BrushSizeField.Value = Math.Round(Math.Clamp(value, BrushSettings.MinSize, BrushSettings.MaxSize));
+    }
+
+    public BrushSettings ReadBrush(PaintTool tool)
+    {
+        Color color = BrushColorSwatch.Color;
+        return new BrushSettings
+        {
+            Tool = tool,
+            Size = BrushSizeField.Value,
+            Hardness = BrushHardnessField.Value,
+            Opacity = BrushOpacityField.Value,
+            Color = new System.Numerics.Vector3(color.R / 255f, color.G / 255f, color.B / 255f),
+        };
+    }
+
+    private void UpdateBrushSummary()
+    {
+        string tool = Loc.T(_tool switch
+        {
+            PaintTool.Eraser => "S.Tool.Eraser",
+            PaintTool.Blur => "S.Tool.Blur",
+            _ => "S.Tool.Brush",
+        });
+        BrushSummaryText.Text = $"{tool} {BrushSizeField.Value:0}";
     }
 
     public void SetZoom(double? ratio, double rotationDegrees)

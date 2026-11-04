@@ -30,8 +30,8 @@ public sealed record ExportSettings
 }
 
 /// <summary>
-/// プロジェクトの内容 (FR-08)。生成設定・プレビュー設定・エフェクト設定を保存・復元する。
-/// レイヤーと編集内容はペイントの Phase で追加する (画像データは同じ .uskfx の ZIP 内に置く)。
+/// プロジェクトの内容 (FR-08)。生成設定・プレビュー設定・エフェクト設定・描いた内容を保存・復元する。
+/// 画像データは同じ .uskfx の ZIP 内に置く。
 /// </summary>
 public sealed record ProjectDocument
 {
@@ -45,4 +45,8 @@ public sealed record ProjectDocument
     /// <summary>読み込んだ画像。project.json ではなく ZIP 内の PNG に保存する。</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public ImageData? Image { get; init; }
+
+    /// <summary>描いた内容 (編集レイヤー、乗算なし)。project.json ではなく ZIP 内の PNG に保存する。</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ImageData? PaintLayer { get; init; }
 }

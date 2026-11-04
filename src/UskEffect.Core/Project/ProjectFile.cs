@@ -23,11 +23,12 @@ public static class ProjectFile
         string.Equals(Path.GetExtension(path), Extension, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>形式を変えたら上げる。読込時、これより新しい形式は拒否する。</summary>
-    /// 1: 設定のみ。2: 読み込んだ画像を images/source.png に保存。
-    public const int CurrentFormatVersion = 2;
+    /// 1: 設定のみ。2: 読み込んだ画像を images/source.png に保存。3: 描いた内容を images/paint.png に保存。
+    public const int CurrentFormatVersion = 3;
 
     private const string JsonEntryName = "project.json";
     private const string ImageEntryName = "images/source.png";
+    private const string PaintEntryName = "images/paint.png";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -55,14 +56,29 @@ public static class ProjectFile
             writer.Dispose();
 
             if (document.Image is { } image)
-            {
-                // PNG 自体が圧縮済みなので ZIP では圧縮しない
-                var imageEntry = zip.CreateEntry(ImageEntryName, CompressionLevel.NoCompression);
-                using var imageStream = imageEntry.Open();
-                PngEncoder.Write(imageStream, image.Width, image.Height, PngColorType.Rgba, 8, image.Rgba);
-            }
+                WriteImage(zip, ImageEntryName, image);
+            if (document.PaintLayer is { } paint)
+                WriteImage(zip, PaintEntryName, paint);
         }
         File.Move(temp, path, overwrite: true);
+    }
+
+    private static void WriteImage(ZipArchive zip, string name, UskEffect.Graphics.ImageData image)
+    {
+        // PNG 自体が圧縮済みなので ZIP では圧縮しない
+        var entry = zip.CreateEntry(name, CompressionLevel.NoCompression);
+        using var stream = entry.Open();
+        PngEncoder.Write(stream, image.Width, image.Height, PngColorType.Rgba, 8, image.Rgba);
+    }
+
+    private static UskEffect.Graphics.ImageData? ReadImage(ZipArchive zip, string name)
+    {
+        if (zip.GetEntry(name) is not { } entry)
+            return null;
+        using var stream = entry.Open();
+        using var buffer = new MemoryStream();
+        stream.CopyTo(buffer);
+        return ImageLoader.DecodeWithWic(buffer.ToArray());
     }
 
     public static ProjectDocument Load(string path)
@@ -83,14 +99,7 @@ public static class ProjectFile
             json.Remove("application");
             var document = json.Deserialize<ProjectDocument>(JsonOptions) ?? new ProjectDocument();
 
-            if (zip.GetEntry(ImageEntryName) is { } imageEntry)
-            {
-                using var imageStream = imageEntry.Open();
-                using var buffer = new MemoryStream();
-                imageStream.CopyTo(buffer);
-                document = document with { Image = ImageLoader.DecodeWithWic(buffer.ToArray()) };
-            }
-            return document;
+            return document with { Image = ReadImage(zip, ImageEntryName), PaintLayer = ReadImage(zip, PaintEntryName) };
         }
         catch (InvalidDataException ex)
         {

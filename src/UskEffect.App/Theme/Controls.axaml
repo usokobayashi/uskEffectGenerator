@@ -68,6 +68,10 @@
       <Setter Property="Background" Value="{StaticResource Ue.Hover}" />
       <Setter Property="Foreground" Value="{StaticResource Ue.Text}" />
     </Style>
+    <Style Selector="^.tool.selected:not(:disabled)">
+      <Setter Property="Background" Value="{StaticResource Ue.Fill}" />
+      <Setter Property="Foreground" Value="{StaticResource Ue.Accent}" />
+    </Style>
 
     <Style Selector="^.link"><Setter Property="Foreground" Value="{StaticResource Ue.Muted}" /></Style>
     <Style Selector="^.link:pointerover"><Setter Property="Foreground" Value="{StaticResource Ue.Accent}" /></Style>

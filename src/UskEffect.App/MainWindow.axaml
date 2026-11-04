@@ -13,7 +13,7 @@
       <views:StatusBar x:Name="Status" DockPanel.Dock="Bottom" />
       <views:TimelineBar x:Name="Timeline" DockPanel.Dock="Bottom" />
 
-      <views:ToolRail DockPanel.Dock="Left" />
+      <views:ToolRail x:Name="Rail" DockPanel.Dock="Left" />
 
       <!-- 右: 設定のタブ -->
       <Border x:Name="RightPanel" DockPanel.Dock="Right" Width="{StaticResource Ue.Size.RightPanel}" Background="{StaticResource Ue.Panel}"

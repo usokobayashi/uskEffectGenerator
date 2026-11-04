@@ -87,6 +87,7 @@ public partial class MainWindow : Window
         ApplySliderLimits();
         ApplySettings();
         SetUpProjectCommands();
+        SetUpPaint();
         Opened += (_, _) =>
         {
             RootPanel.Opacity = 1;

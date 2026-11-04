@@ -48,7 +48,7 @@ public sealed class EffectRenderer : IDisposable
     }
 
     public void Render(ID3D11RenderTargetView target, int width, int height, ID3D11ShaderResourceView? source,
-        EffectSettings effect, PolarSettings polar, EffectFrame frame, bool sourceIsColor = false)
+        EffectSettings effect, PolarSettings polar, EffectFrame frame, bool sourceIsColor = false, bool sourceIsPaintedNoise = false)
     {
         var context = _gpu.Context;
         context.OMSetRenderTargets(target);
@@ -60,7 +60,8 @@ public sealed class EffectRenderer : IDisposable
         uint flags = (effect.Mapping == EffectMapping.Polar ? 1u : 0u)
                    | (effect.TextureAsAlpha ? 2u : 0u)
                    | (effect.Mask == EffectMask.SoftCircle ? 4u : 0u)
-                   | (sourceIsColor ? 8u : 0u);
+                   | (sourceIsColor ? 8u : 0u)
+                   | (sourceIsPaintedNoise ? 16u : 0u);
         var constants = new EffectConstants
         {
             ViewportWidth = width,

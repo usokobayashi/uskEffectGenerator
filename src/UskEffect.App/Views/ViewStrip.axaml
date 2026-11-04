@@ -1,4 +1,4 @@
-<!-- 中央の帯: 表示の切り替え、極座標の設定、表示倍率 -->
+<!-- 中央の帯: 表示の切り替え、ブラシと極座標の設定、表示倍率 -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="using:UskEffect.App.Controls.Ui"
@@ -12,6 +12,28 @@
         <ListBoxItem Content="{DynamicResource S.View.Effect}" />
       </ui:SegmentedControl>
       <TextBlock x:Name="ZoomText" DockPanel.Dock="Right" Classes="muted mono" VerticalAlignment="Center" Margin="8,0,0,0" />
+      <Button x:Name="BrushButton" DockPanel.Dock="Right" Classes="btn" Width="{StaticResource Ue.Size.PolarButton}" IsVisible="False"
+              Margin="8,0,0,0" VerticalAlignment="Center" HorizontalContentAlignment="Stretch">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock x:Name="BrushSummaryText" Classes="mono" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+          <Path Grid.Column="1" Classes="stroke" Data="{StaticResource Icon.Chevron}" Stroke="{StaticResource Ue.Muted}"
+                Width="{StaticResource Ue.Size.Chevron}" Height="{StaticResource Ue.Size.Chevron}" VerticalAlignment="Center" />
+        </Grid>
+        <Button.Flyout>
+          <Flyout Placement="BottomEdgeAlignedRight">
+            <StackPanel Width="{StaticResource Ue.Size.PolarPopup}" Spacing="{StaticResource Ue.Gap.Row}">
+              <ui:SliderField x:Name="BrushSizeField" Label="{DynamicResource S.Brush.Size}" Minimum="1" Maximum="1024" Value="32" Step="1" />
+              <ui:SliderField x:Name="BrushHardnessField" Label="{DynamicResource S.Brush.Hardness}" Minimum="0" Maximum="1" Value="0.8" Step="0.01" />
+              <ui:SliderField x:Name="BrushOpacityField" Label="{DynamicResource S.Brush.Opacity}" Minimum="0" Maximum="1" Value="1" Step="0.01" />
+              <StackPanel x:Name="BrushColorRow" Orientation="Horizontal" Spacing="{StaticResource Ue.Gap.Normal}">
+                <TextBlock Classes="rowLabel" Text="{DynamicResource S.Brush.Color}" />
+                <ui:ColorSwatch x:Name="BrushColorSwatch" Color="#FFFFFF" AutomationProperties.Name="{DynamicResource S.Brush.Color}" />
+              </StackPanel>
+              <Button x:Name="ClearPaintButton" Classes="btn" Content="{DynamicResource S.Paint.ClearMenu}" HorizontalAlignment="Right" />
+            </StackPanel>
+          </Flyout>
+        </Button.Flyout>
+      </Button>
       <Button x:Name="PolarButton" DockPanel.Dock="Right" Classes="btn" Width="{StaticResource Ue.Size.PolarButton}"
               VerticalAlignment="Center" HorizontalContentAlignment="Stretch">
         <Grid ColumnDefinitions="*,Auto">
