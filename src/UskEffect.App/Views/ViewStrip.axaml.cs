@@ -15,7 +15,7 @@ public partial class ViewStrip : UserControl
     /// <summary>表示か極座標の設定が変わったときに発生する。</summary>
     public event Action? Changed;
 
-    /// <summary>「描いた内容を消去」を押したときに発生する。</summary>
+    /// <summary>「このレイヤーを消去」を押したときに発生する。</summary>
     public event Action? ClearPaintRequested;
 
     private PaintTool _tool = PaintTool.Brush;
@@ -106,6 +106,8 @@ public partial class ViewStrip : UserControl
             Opacity = BrushOpacityField.Value,
             Color = new System.Numerics.Vector3(color.R / 255f, color.G / 255f, color.B / 255f),
             Wrap = BrushWrapSwitch.IsChecked == true,
+            PressureSize = PressureSizeSwitch.IsChecked == true,
+            PressureOpacity = PressureOpacitySwitch.IsChecked == true,
         };
     }
 

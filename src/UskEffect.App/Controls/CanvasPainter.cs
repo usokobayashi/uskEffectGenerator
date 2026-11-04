@@ -21,7 +21,7 @@ internal sealed class CanvasPainter
     private BrushSettings? _strokeBrush;
     private ICanvasMapping? _mapping;
     private StrokeInterpolator? _interpolator;
-    private readonly List<(double X, double Y)> _points = [];
+    private readonly List<StrokePoint> _points = [];
 
     public CanvasPainter(D3DHost host, RenderEngine engine, Func<BrushSettings> brush, Func<bool> isEnabled, Action strokeFinished)
     {
@@ -62,7 +62,7 @@ internal sealed class CanvasPainter
         Win32.BeginCapture(_host.Hwnd);
 
         _points.Clear();
-        _points.Add(_interpolator.Begin(strokeX, strokeY));
+        _points.Add(_interpolator.Begin(strokeX, strokeY, _host.PenPressure ?? 1));
         Submit();
     }
 
@@ -74,8 +74,8 @@ internal sealed class CanvasPainter
             return;
         }
 
-        // ボタンを離した通知を取りこぼしていたら、ここで終える
-        if (!Win32.IsLeftButtonDown())
+        // ボタンを離した通知を取りこぼしていたら、ここで終える。ペンにボタンの状態はない
+        if (_host.PenPressure is null && !Win32.IsLeftButtonDown())
         {
             EndStroke();
             return;
@@ -84,7 +84,7 @@ internal sealed class CanvasPainter
         _engine.Cursor = new PaintCursor(x, y, _strokeBrush.Size);
         var (strokeX, strokeY) = _mapping!.ToStrokeSpace(x, y);
         _points.Clear();
-        _interpolator!.MoveTo(strokeX, strokeY, _points);
+        _interpolator!.MoveTo(strokeX, strokeY, _points, _host.PenPressure ?? 1);
         Submit();
     }
 
@@ -98,7 +98,10 @@ internal sealed class CanvasPainter
     {
         var mapping = _mapping!;
         var brush = _strokeBrush!;
-        var dabs = _points.Select(p => mapping.ToDab(p.X, p.Y, brush)).OfType<PaintDab>().ToArray();
+        var dabs = _points
+            .Select(p => mapping.ToDab(p.X, p.Y, brush) is { } dab ? dab with { Pressure = p.Pressure } : (PaintDab?)null)
+            .OfType<PaintDab>()
+            .ToArray();
         _engine.Paint(brush, dabs, mapping.Polar);
     }
 
@@ -108,6 +111,7 @@ internal sealed class CanvasPainter
         _mapping = null;
         _interpolator = null;
         Win32.EndCapture();
+        _engine.EndStroke();
         _strokeFinished();
     }
 }

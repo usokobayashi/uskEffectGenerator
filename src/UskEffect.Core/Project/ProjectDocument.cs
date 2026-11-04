@@ -46,7 +46,7 @@ public sealed record ProjectDocument
     [System.Text.Json.Serialization.JsonIgnore]
     public ImageData? Image { get; init; }
 
-    /// <summary>描いた内容 (編集レイヤー、乗算なし)。project.json ではなく ZIP 内の PNG に保存する。</summary>
-    [System.Text.Json.Serialization.JsonIgnore]
-    public ImageData? PaintLayer { get; init; }
+    /// <summary>レイヤー (先頭が一番下)。何もしていなければ null。画素は ZIP 内の PNG に保存する。</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<UskEffect.Graphics.Painting.LayerData>? Layers { get; init; }
 }

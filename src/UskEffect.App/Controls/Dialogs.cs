@@ -23,10 +23,6 @@ public static class Dialogs
         ShowAsync(owner, Loc.T("S.Dialog.UnsavedTitle"), Loc.F("S.Dialog.UnsavedBody", documentName), dismissed: UnsavedChoice.Cancel,
             (Loc.T("S.Dialog.Save"), UnsavedChoice.Save), (Loc.T("S.Dialog.Discard"), UnsavedChoice.Discard), (Loc.T("S.Dialog.Cancel"), UnsavedChoice.Cancel));
 
-    /// <summary>取り消せない操作の確認。実行するなら true。ウィンドウを閉じた場合はキャンセル扱い。</summary>
-    public static Task<bool> ConfirmAsync(Window owner, string title, string message, string action) =>
-        ShowAsync(owner, title, message, dismissed: false, (action, true), (Loc.T("S.Dialog.Cancel"), false));
-
     /// <summary>ボタンを押さずにウィンドウを閉じたときは dismissed を返す。</summary>
     private static async Task<T> ShowAsync<T>(Window owner, string title, string message, T dismissed, params (string Label, T Value)[] buttons)
     {

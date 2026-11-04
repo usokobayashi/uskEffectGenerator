@@ -233,6 +233,7 @@ public partial class MainWindow : Window
         Status.ShowStats(stats, fps);
         SeamTab.ShowAnalysis(stats.Seam, stats.SeamAnalysisPending);
         ShowSeamMark(stats.Seam);
+        RefreshUndoButtons();
         _lastStats = stats;
         Strip.SetZoom(ZoomRatio(stats), _engine?.View.RotationDegrees ?? 0);
     }

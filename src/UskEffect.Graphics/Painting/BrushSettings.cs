@@ -33,6 +33,19 @@ public sealed record BrushSettings
     /// <summary>テクスチャの端をまたいで反対側へつなげて描く (FR-23)。極座標の 0°/360° は常につなぐ。</summary>
     public bool Wrap { get; init; } = true;
 
+    /// <summary>筆圧で大きさを変える (FR-18)。マウスは常に筆圧 1 として扱う。</summary>
+    public bool PressureSize { get; init; } = true;
+
+    /// <summary>筆圧で濃さを変える (FR-18)。</summary>
+    public bool PressureOpacity { get; init; }
+
+    /// <summary>筆圧に対する大きさの倍率。ごく弱い筆圧でも線が消えないよう下限を置く。</summary>
+    public double SizeAt(double pressure) =>
+        PressureSize ? 0.1 + 0.9 * Math.Clamp(pressure, 0, 1) : 1;
+
+    public double FlowAt(double pressure) =>
+        PressureOpacity ? Flow * Math.Clamp(pressure, 0, 1) : Flow;
+
     /// <summary>スタンプの間隔 [画素]。</summary>
     public double Spacing => Math.Max(1, Size * 0.1);
 
@@ -54,7 +67,21 @@ public sealed record BrushSettings
 /// スタンプの中心。テクスチャの画素で、テクスチャ内に折り返した値。
 /// 極座標で描くときは、外接円を 1 とした中心の半径も持つ。
 /// </summary>
-public readonly record struct PaintDab(double X, double Y, double PolarRadius = 0);
+public readonly record struct PaintDab(double X, double Y, double PolarRadius = 0, double Pressure = 1);
+
+/// <summary>ストロークの通り道の点。</summary>
+public readonly record struct StrokePoint(double X, double Y, double Pressure = 1);
+
+/// <summary>プロジェクトに保存するレイヤー (FR-15)。Image は乗算なし。画素は JSON ではなく ZIP 内の PNG に置く。</summary>
+public sealed record LayerData
+{
+    public string Name { get; init; } = "";
+    public bool Visible { get; init; } = true;
+    public float Opacity { get; init; } = 1f;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ImageData? Image { get; init; }
+}
 
 /// <summary>極座標キャンバス上で円になるスタンプの設定 (FR-19 / FR-21)。</summary>
 public sealed record PolarStamp(double InnerRadius, double OuterRadius, bool FlipRadial, double TilingX, double TilingY, double ContentSize);
@@ -83,36 +110,41 @@ public interface ICanvasMapping
 /// <summary>ポインターの通り道に、一定の間隔でスタンプを置く。</summary>
 public sealed class StrokeInterpolator(double spacing)
 {
-    private double _lastX, _lastY;
+    private double _lastX, _lastY, _lastPressure;
     private double _untilNext;
 
     /// <summary>最初の点。ここにスタンプを 1 つ置く。</summary>
-    public (double X, double Y) Begin(double x, double y)
+    public StrokePoint Begin(double x, double y, double pressure = 1)
     {
         _lastX = x;
         _lastY = y;
+        _lastPressure = pressure;
         _untilNext = spacing;
-        return (x, y);
+        return new StrokePoint(x, y, pressure);
     }
 
-    /// <summary>次の点までに置くスタンプを output へ足す。</summary>
-    public void MoveTo(double x, double y, List<(double X, double Y)> output)
+    /// <summary>次の点までに置くスタンプを output へ足す。筆圧も間を補間する。</summary>
+    public void MoveTo(double x, double y, List<StrokePoint> output, double pressure = 1)
     {
         double dx = x - _lastX, dy = y - _lastY;
         double length = Math.Sqrt(dx * dx + dy * dy);
         if (length <= 0)
+        {
+            _lastPressure = pressure;
             return;
+        }
 
         double along = _untilNext;
         while (along <= length)
         {
             double t = along / length;
-            output.Add((_lastX + dx * t, _lastY + dy * t));
+            output.Add(new StrokePoint(_lastX + dx * t, _lastY + dy * t, _lastPressure + (pressure - _lastPressure) * t));
             along += spacing;
         }
         _untilNext = along - length;
         _lastX = x;
         _lastY = y;
+        _lastPressure = pressure;
     }
 }
 

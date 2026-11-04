@@ -1,21 +1,19 @@
-<!-- レイヤー。ペイント機能ができるまで無効の見た目で場所を確保する -->
+<!-- レイヤー (FR-15)。上にあるものほど手前。一番下の元の画像は固定 -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="using:UskEffect.App.Controls.Ui"
              x:Class="UskEffect.App.Views.LayerPanel">
   <StackPanel Spacing="{StaticResource Ue.Gap.Row}">
+    <ui:SliderField x:Name="OpacityField" Label="{DynamicResource S.Layer.Opacity}" Minimum="0" Maximum="1" Value="1" Step="0.01" />
+    <StackPanel x:Name="LayerList" Spacing="{StaticResource Ue.Gap.Tight}" />
     <Border Classes="layer">
-      <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="{StaticResource Ue.Gap.Line}">
-        <Button Classes="ico" IsEnabled="False" AutomationProperties.Name="{DynamicResource S.Layer.ToggleVisible}">
-          <Path Classes="stroke icon" Data="{StaticResource Icon.Eye}" />
-        </Button>
-        <TextBlock Grid.Column="1" Text="{DynamicResource S.Layer.Noise}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-        <TextBlock Grid.Column="2" Classes="muted mono" Text="100%" VerticalAlignment="Center" />
-      </Grid>
+      <TextBlock Classes="muted" Text="{DynamicResource S.Layer.Source}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
     </Border>
     <StackPanel Orientation="Horizontal" Spacing="{StaticResource Ue.Gap.Normal}">
-      <Button Classes="btn" Content="{DynamicResource S.Layer.Add}" IsEnabled="False" />
-      <Button Classes="btn" Content="{DynamicResource S.Layer.Delete}" IsEnabled="False" />
+      <Button x:Name="AddButton" Classes="btn" Content="{DynamicResource S.Layer.Add}" />
+      <Button x:Name="DeleteButton" Classes="btn" Content="{DynamicResource S.Layer.Delete}" />
+      <Button x:Name="MoveUpButton" Classes="btn" Content="{DynamicResource S.Layer.MoveUp}" />
+      <Button x:Name="MoveDownButton" Classes="btn" Content="{DynamicResource S.Layer.MoveDown}" />
     </StackPanel>
-    <TextBlock Classes="muted" Text="{DynamicResource S.Layer.Note}" TextWrapping="Wrap" />
   </StackPanel>
 </UserControl>

@@ -13,7 +13,7 @@ public sealed class StrokeTests
     public void Interpolator_PlacesDabsAtEvenSpacing_AcrossMoves()
     {
         var interpolator = new StrokeInterpolator(10);
-        var dabs = new List<(double X, double Y)> { interpolator.Begin(0, 0) };
+        var dabs = new List<StrokePoint> { interpolator.Begin(0, 0) };
         interpolator.MoveTo(7, 0, dabs);
         interpolator.MoveTo(25, 0, dabs);
 
@@ -24,7 +24,7 @@ public sealed class StrokeTests
     public void Interpolator_NoMovement_AddsNothing()
     {
         var interpolator = new StrokeInterpolator(4);
-        var dabs = new List<(double X, double Y)> { interpolator.Begin(3, 3) };
+        var dabs = new List<StrokePoint> { interpolator.Begin(3, 3) };
         interpolator.MoveTo(3, 3, dabs);
         Assert.Single(dabs);
     }
@@ -157,7 +157,7 @@ public sealed class CanvasMappingTests
         var interpolator = new StrokeInterpolator(brush.Spacing);
         var start = mapping.ToStrokeSpace(512 + 300, 512 - 20);
         var end = mapping.ToStrokeSpace(512 + 300, 512 + 20);
-        var points = new List<(double X, double Y)> { interpolator.Begin(start.X, start.Y) };
+        var points = new List<StrokePoint> { interpolator.Begin(start.X, start.Y) };
         interpolator.MoveTo(end.X, end.Y, points);
 
         var dabs = points.Select(p => mapping.ToDab(p.X, p.Y, brush)!.Value).ToArray();
@@ -265,7 +265,7 @@ public sealed class PaintRenderTests : IDisposable
     public void NoPaint_ReadsNothing_AndStaysOffTheGpu()
     {
         Assert.Null(_engine.ReadComposite());
-        Assert.Null(_engine.ReadPaintLayer());
+        Assert.Null(_engine.ReadLayers());
     }
 
     [Fact]
@@ -339,14 +339,15 @@ public sealed class PaintRenderTests : IDisposable
     }
 
     [Fact]
-    public void Clear_RemovesEverything()
+    public void Clear_RemovesThePaint_ButCanBeUndone()
     {
         _engine.SetImageSource(Split(64));
         _engine.Paint(Red, [new PaintDab(16, 16)]);
-        _engine.ClearPaint();
-
+        _engine.ClearActiveLayer();
         Assert.Null(_engine.ReadComposite());
-        Assert.Null(_engine.ReadPaintLayer());
+
+        _engine.Undo();
+        Assert.Equal((255, 0, 0, 255), At(_engine.ReadComposite()!, 16, 16));
     }
 
     [Fact]
@@ -536,7 +537,7 @@ public sealed class PaintRenderTests : IDisposable
         _engine.CancelSeamBlend();
 
         Assert.True(SeamStep(_engine.ReadComposite()!, 32) < 16);
-        Assert.NotNull(_engine.ReadPaintLayer());
+        Assert.NotNull(_engine.ReadLayers());
     }
 
     [Fact]
@@ -549,24 +550,350 @@ public sealed class PaintRenderTests : IDisposable
     }
 
     [Fact]
+    public void Layers_StackInOrder_WithOpacityAndVisibility()
+    {
+        _engine.SetImageSource(Split(64));
+        _engine.Paint(Red, [new PaintDab(16, 16)]);
+        _engine.AddLayer();
+        var blue = Red with { Color = new Vector3(0, 0, 1) };
+        _engine.Paint(blue, [new PaintDab(16, 16)]);
+        Assert.Equal((0, 0, 255, 255), At(_engine.ReadComposite()!, 16, 16));
+
+        int top = _engine.ActiveLayerId;
+        _engine.SetLayerOpacity(top, 0.5f);
+        var (r, _, b, _) = At(_engine.ReadComposite()!, 16, 16);
+        Assert.InRange(r, 120, 135);
+        Assert.InRange(b, 120, 135);
+
+        _engine.SetLayerVisible(top, false);
+        Assert.Equal((255, 0, 0, 255), At(_engine.ReadComposite()!, 16, 16));
+        _engine.SetLayerVisible(top, true);
+        _engine.SetLayerOpacity(top, 1f);
+
+        // 青を赤の下へ動かすと赤が見える
+        _engine.MoveLayer(top, -1);
+        Assert.Equal((255, 0, 0, 255), At(_engine.ReadComposite()!, 16, 16));
+        Assert.Equal(top, _engine.Layers[0].Id);
+
+        _engine.RemoveLayer(_engine.Layers[1].Id);
+        Assert.Single(_engine.Layers);
+        Assert.Equal((0, 0, 255, 255), At(_engine.ReadComposite()!, 16, 16));
+
+        // 最後の 1 枚は消せない
+        _engine.RemoveLayer(_engine.Layers[0].Id);
+        Assert.Single(_engine.Layers);
+    }
+
+    [Fact]
+    public void Eraser_OnlyAffectsTheActiveLayer()
+    {
+        _engine.SetImageSource(Split(64));
+        _engine.Paint(Red, [new PaintDab(16, 16)]);
+        _engine.AddLayer();
+        _engine.Paint(Red with { Tool = PaintTool.Eraser }, [new PaintDab(16, 16)]);
+        Assert.Equal((255, 0, 0, 255), At(_engine.ReadComposite()!, 16, 16));
+    }
+
+    [Fact]
+    public void Blur_WritesToTheActiveLayer_Only()
+    {
+        _engine.SetImageSource(Split(64));
+        _engine.AddLayer();
+        _engine.Paint(Red with { Tool = PaintTool.Blur, Size = 24 }, [new PaintDab(32, 16)]);
+        var layers = _engine.ReadLayers()!;
+        Assert.Null(layers[0].Image);
+        Assert.NotNull(layers[1].Image);
+    }
+
+    [Fact]
+    public void Undo_RestoresOneStroke_AndRedoReappliesIt()
+    {
+        _engine.SetImageSource(Split(64));
+        _engine.Paint(Red, [new PaintDab(16, 16)]);
+        _engine.EndStroke();
+        _engine.Paint(Red with { Color = new Vector3(0, 1, 0) }, [new PaintDab(16, 16), new PaintDab(40, 40)]);
+        _engine.EndStroke();
+        Assert.Equal((0, 255, 0, 255), At(_engine.ReadComposite()!, 16, 16));
+        Assert.Equal((0, 255, 0, 255), At(_engine.ReadComposite()!, 40, 40));
+
+        _engine.Undo();
+        var undone = _engine.ReadComposite()!;
+        Assert.Equal((255, 0, 0, 255), At(undone, 16, 16));
+        Assert.Equal((255, 255, 255, 255), At(undone, 40, 40));
+        Assert.True(_engine.CanRedo);
+
+        _engine.Redo();
+        Assert.Equal((0, 255, 0, 255), At(_engine.ReadComposite()!, 40, 40));
+
+        _engine.Undo();
+        _engine.Undo();
+        Assert.Null(_engine.ReadComposite());
+        Assert.False(_engine.CanUndo);
+
+        // 元に戻したあとに描くと、やり直しは消える
+        _engine.Paint(Red, [new PaintDab(8, 8)]);
+        _engine.EndStroke();
+        _engine.ReadComposite();
+        Assert.False(_engine.CanRedo);
+    }
+
+    [Fact]
+    public void Undo_CoversLayerOperations_IncludingADeletedLayersPixels()
+    {
+        _engine.SetImageSource(Split(64));
+        _engine.AddLayer();
+        _engine.Paint(Red, [new PaintDab(16, 16)]);
+        _engine.EndStroke();
+        int id = _engine.ActiveLayerId;
+
+        _engine.RemoveLayer(id);
+        Assert.Null(_engine.ReadComposite());
+
+        _engine.Undo();
+        Assert.Equal(2, _engine.Layers.Count);
+        Assert.Equal(id, _engine.ActiveLayerId);
+        Assert.Equal((255, 0, 0, 255), At(_engine.ReadComposite()!, 16, 16));
+
+        _engine.Undo();
+        _engine.Undo();
+        Assert.Single(_engine.Layers);
+        Assert.Null(_engine.ReadComposite());
+    }
+
+    [Fact]
+    public void Undo_MergesOpacityChanges_IntoOneStep()
+    {
+        _engine.SetImageSource(Split(64));
+        _engine.Paint(Red, [new PaintDab(16, 16)]);
+        _engine.EndStroke();
+        int id = _engine.ActiveLayerId;
+        foreach (float opacity in new[] { 0.9f, 0.7f, 0.5f })
+            _engine.SetLayerOpacity(id, opacity);
+
+        _engine.Undo();
+        Assert.Equal(1f, _engine.Layers[0].Opacity);
+        Assert.Equal((255, 0, 0, 255), At(_engine.ReadComposite()!, 16, 16));
+    }
+
+    [Fact]
+    public void Undo_RestoresStrokeOnTheLayerItWasDrawnOn()
+    {
+        _engine.SetImageSource(Split(64));
+        _engine.Paint(Red, [new PaintDab(16, 16)]);
+        _engine.EndStroke();
+        int first = _engine.ActiveLayerId;
+        _engine.AddLayer();
+        _engine.SetActiveLayer(first);
+        _engine.Paint(Red with { Tool = PaintTool.Eraser }, [new PaintDab(16, 16)]);
+        _engine.EndStroke();
+        Assert.Equal((0, 0, 0, 255), At(_engine.ReadComposite()!, 16, 16));
+
+        _engine.Undo();
+        Assert.Equal((255, 0, 0, 255), At(_engine.ReadComposite()!, 16, 16));
+    }
+
+    [Fact]
+    public void Undo_AfterABlendCommit_RemovesTheBlend()
+    {
+        _engine.SetImageSource(Split(64));
+        _engine.PreviewSeamBlend(new SeamBlendSettings(SeamMode.X, 0.25, 1));
+        _engine.CommitSeamBlend();
+        Assert.True(SeamStep(_engine.ReadComposite()!, 32) < 16);
+
+        _engine.Undo();
+        Assert.Null(_engine.ReadComposite());
+    }
+
+    [Fact]
+    public void Resolution_Change_KeepsThePaint_ButClearsHistory()
+    {
+        _engine.Noise = new NoiseSettings { Resolution = 64 };
+        _engine.Paint(Red, [new PaintDab(32, 32)]);
+        _engine.EndStroke();
+        _engine.ReadComposite();
+        Assert.True(_engine.CanUndo);
+
+        _engine.Noise = new NoiseSettings { Resolution = 128 };
+        Assert.Equal((255, 0, 0, 255), At(_engine.ReadComposite()!, 64, 64));
+        Assert.False(_engine.CanUndo);
+    }
+
+    [Fact]
+    public void Pressure_ScalesTheDab()
+    {
+        _engine.SetImageSource(Split(64));
+        var brush = Red with { Size = 32, PressureSize = true };
+        _engine.Paint(brush, [new PaintDab(16, 32, Pressure: 0.2)]);
+        _engine.Paint(brush, [new PaintDab(48, 32, Pressure: 1)]);
+
+        var image = _engine.ReadComposite()!;
+        Assert.Equal((255, 0, 0, 255), At(image, 16, 32));
+        Assert.Equal(0, At(image, 16 + 10, 32).R);              // 弱い筆圧: 半径 4.5
+        Assert.Equal((255, 0, 0, 255), At(image, 48 + 10, 32)); // 強い筆圧: 半径 16
+    }
+
+    [Fact]
+    public void Pressure_CanScaleTheOpacity()
+    {
+        _engine.SetImageSource(Split(64));
+        _engine.Paint(Red with { PressureSize = false, PressureOpacity = true }, [new PaintDab(16, 32, Pressure: 0.5)]);
+        Assert.InRange(At(_engine.ReadComposite()!, 16, 32).R, 120, 135);
+    }
+
+    [Fact]
+    public void Project_RoundTripsEveryLayer_WithItsSettings()
+    {
+        _engine.SetImageSource(Split(64));
+        _engine.Paint(Red, [new PaintDab(16, 16)]);
+        _engine.AddLayer();
+        _engine.SetLayerOpacity(_engine.ActiveLayerId, 0.5f);
+        _engine.AddLayer();
+        _engine.SetLayerVisible(_engine.ActiveLayerId, false);
+
+        string path = Path.Combine(Path.GetTempPath(), $"uskfx-layers-{Guid.NewGuid():N}.uskfx");
+        try
+        {
+            ProjectFile.Save(path, new ProjectDocument { Layers = _engine.ReadLayers() });
+            var loaded = ProjectFile.Load(path).Layers!;
+            Assert.Equal(3, loaded.Count);
+            Assert.NotNull(loaded[0].Image);
+            Assert.Null(loaded[1].Image);
+            Assert.Equal(0.5f, loaded[1].Opacity);
+            Assert.False(loaded[2].Visible);
+            Assert.Equal("レイヤー 2", loaded[1].Name);
+
+            using var other = new RenderEngine(Path.Combine(NoiseFixture.FindRepositoryRoot(), "Shaders"));
+            other.SetImageSource(Split(64));
+            other.SetLayers(loaded);
+            Assert.Equal(3, other.Layers.Count);
+            Assert.Equal((255, 0, 0, 255), At(other.ReadComposite()!, 16, 16));
+            Assert.False(other.CanUndo);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Project_FormatThree_LoadsItsSinglePaintLayer()
+    {
+        _engine.SetImageSource(Split(64));
+        _engine.Paint(Red, [new PaintDab(16, 16)]);
+
+        string path = Path.Combine(Path.GetTempPath(), $"uskfx-v3-{Guid.NewGuid():N}.uskfx");
+        try
+        {
+            ProjectFile.Save(path, new ProjectDocument { Layers = _engine.ReadLayers() });
+            using (var zip = System.IO.Compression.ZipFile.Open(path, System.IO.Compression.ZipArchiveMode.Update))
+            {
+                // 形式 3 の並びに書き換える
+                var png = zip.GetEntry("images/layer0.png")!;
+                using var buffer = new MemoryStream();
+                using (var read = png.Open())
+                    read.CopyTo(buffer);
+                png.Delete();
+                using (var write = zip.CreateEntry("images/paint.png").Open())
+                    write.Write(buffer.ToArray());
+
+                var jsonEntry = zip.GetEntry("project.json")!;
+                System.Text.Json.Nodes.JsonObject json;
+                using (var read = jsonEntry.Open())
+                    json = System.Text.Json.Nodes.JsonNode.Parse(read)!.AsObject();
+                jsonEntry.Delete();
+                json.Remove("Layers");
+                json["formatVersion"] = 3;
+                using var writeJson = zip.CreateEntry("project.json").Open();
+                System.Text.Json.JsonSerializer.Serialize(writeJson, json);
+            }
+
+            var loaded = ProjectFile.Load(path).Layers!;
+            Assert.Single(loaded);
+            Assert.Equal((255, 0, 0, 255), At(loaded[0].Image!, 16, 16));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    // ノイズ生成 → レイヤー → 矩形と極座標への描画 → 継ぎ目の修正 → 元に戻す → 保存 → 読込 → 書き出し
+    [Fact]
+    public void Integration_FromNoiseToExport()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), $"uskfx-flow-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        try
+        {
+            _engine.Noise = new NoiseSettings { Resolution = 128, Seam = SeamMode.XY };
+
+            var white = Red with { Color = Vector3.One, Size = 24 };
+            _engine.Paint(white, [new PaintDab(32, 64)]);
+            _engine.EndStroke();
+
+            _engine.AddLayer();
+            var ring = new PolarStamp(0.25, 1, false, 1, 1, 128);
+            _engine.Paint(Red with { Size = 16 }, [new PaintDab(96, 64, 0.625)], ring);
+            _engine.EndStroke();
+
+            _engine.PreviewSeamBlend(new SeamBlendSettings(SeamMode.XY, 0.05, 1));
+            _engine.CommitSeamBlend();
+
+            // 間違えたストロークを元に戻す
+            _engine.Paint(Red with { Size = 48 }, [new PaintDab(64, 20)]);
+            _engine.EndStroke();
+            _engine.Undo();
+
+            var before = _engine.ReadComposite()!;
+            Assert.Equal((255, 255, 255, 255), At(before, 32, 64));
+            Assert.Equal((255, 0, 0, 255), At(before, 96, 64));
+            Assert.Equal(At(before, 64, 20).R, At(before, 64, 20).G);
+
+            string project = Path.Combine(dir, "flow.uskfx");
+            ProjectFile.Save(project, new ProjectDocument { Noise = _engine.Noise, Layers = _engine.ReadLayers() });
+
+            using var other = new RenderEngine(Path.Combine(NoiseFixture.FindRepositoryRoot(), "Shaders"));
+            var loaded = ProjectFile.Load(project);
+            other.Noise = loaded.Noise;
+            other.SetLayers(loaded.Layers);
+            var after = other.ReadComposite()!;
+            Assert.Equal(2, other.Layers.Count);
+
+            // 保存は 8bit なので、丸めの分だけ差を許す
+            for (int i = 0; i < after.Rgba.Length; i++)
+                Assert.InRange(after.Rgba[i] - before.Rgba[i], -2, 2);
+
+            string png = Path.Combine(dir, "flow.png");
+            UskEffect.Core.Export.TextureExporter.SaveImage(png, after, UskEffect.Core.Export.ExportChannels.RgbaSource);
+            var exported = UskEffect.Core.Imaging.ImageLoader.Load(png);
+            Assert.Equal(after.Rgba, exported.Rgba);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Layer_RoundTripsThroughAProjectFile()
     {
         _engine.SetImageSource(Split(64));
         _engine.Paint(Red, [new PaintDab(16, 16)]);
-        var layer = _engine.ReadPaintLayer()!;
+        var layers = _engine.ReadLayers()!;
+        var layer = layers[0].Image!;
         Assert.Equal((255, 0, 0, 255), At(layer, 16, 16));
         Assert.Equal(0, At(layer, 60, 60).A);
 
         string path = Path.Combine(Path.GetTempPath(), $"uskfx-paint-{Guid.NewGuid():N}.uskfx");
         try
         {
-            ProjectFile.Save(path, new ProjectDocument { PaintLayer = layer });
+            ProjectFile.Save(path, new ProjectDocument { Layers = layers });
             var loaded = ProjectFile.Load(path);
             Assert.Null(loaded.Image);
 
             using var other = new RenderEngine(Path.Combine(NoiseFixture.FindRepositoryRoot(), "Shaders"));
             other.SetImageSource(Split(64));
-            other.SetPaintLayer(loaded.PaintLayer);
+            other.SetLayers(loaded.Layers);
             var image = other.ReadComposite()!;
             Assert.Equal((255, 0, 0, 255), At(image, 16, 16));
             Assert.Equal((255, 255, 255, 255), At(image, 60, 60));

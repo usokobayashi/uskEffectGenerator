@@ -225,21 +225,51 @@ public sealed class RenderEngine : IDisposable
     /// <summary>プレビューを取り消す。UI スレッドから呼んでよい。</summary>
     public void CancelSeamBlend() => _paintCommands.Enqueue((_, _) => _paint.CancelSeamBlend());
 
-    /// <summary>描いた内容をすべて消す。UI スレッドから呼んでよい。</summary>
-    public void ClearPaint()
+    /// <summary>ストロークの終わり。ここまでを 1 回の「元に戻す」にする。UI スレッドから呼んでよい。</summary>
+    public void EndStroke() => _paintCommands.Enqueue((_, _) => _paint.CommitEdit());
+
+    /// <summary>選択中のレイヤーを消す。元に戻せる。UI スレッドから呼んでよい。</summary>
+    public void ClearActiveLayer() => _paintCommands.Enqueue((_, _) => _paint.ClearActiveLayer());
+
+    /// <summary>レイヤーの一覧 (先頭が一番下)。</summary>
+    public IReadOnlyList<LayerState> Layers => _paint.Layers;
+
+    public int ActiveLayerId => _paint.ActiveLayerId;
+    public bool CanUndo => _paint.CanUndo || !_paintCommands.IsEmpty;
+    public bool CanRedo => _paint.CanRedo;
+
+    public void AddLayer() => WithPaint(_paint.AddLayer);
+    public void RemoveLayer(int id) => WithPaint(() => _paint.RemoveLayer(id));
+    public void MoveLayer(int id, int delta) => WithPaint(() => _paint.MoveLayer(id, delta));
+    public void SetLayerVisible(int id, bool visible) => WithPaint(() => _paint.SetLayerVisible(id, visible));
+    public void SetLayerOpacity(int id, float opacity) => WithPaint(() => _paint.SetLayerOpacity(id, opacity));
+    public void SetActiveLayer(int id) => WithPaint(() => _paint.SetActiveLayer(id));
+    public void Undo() => WithPaint(() => _paint.Undo());
+    public void Redo() => WithPaint(() => _paint.Redo());
+
+    // レイヤーと履歴の操作は、溜まったストロークを済ませてからすぐ行う。結果を UI がすぐ読めるようにするため
+    private void WithPaint(Action action)
     {
-        // 描いていないプロジェクトを開くだけで、レイヤー用の GPU メモリを取らない
-        if (_paint.HasPaint || !_paintCommands.IsEmpty)
-            _paintCommands.Enqueue((_, _) => _paint.Clear());
+        lock (_sync)
+        {
+            EnsureSourceReady();
+            action();
+            _analysisPending = true;
+            _lastNoiseGenerated = _clock.Elapsed;
+        }
     }
 
-    /// <summary>保存されていた編集レイヤーに置き換える。null で消す。UI スレッドから呼んでよい。</summary>
-    public void SetPaintLayer(ImageData? layer)
+    /// <summary>保存されていたレイヤーに置き換える。null で最初の状態へ戻す。履歴も消える。</summary>
+    public void SetLayers(IReadOnlyList<LayerData>? layers)
     {
-        if (layer is null)
-            ClearPaint();
-        else
-            _paintCommands.Enqueue((_, _) => _paint.SetLayerImage(layer));
+        lock (_sync)
+        {
+            while (_paintCommands.TryDequeue(out _)) { }
+            // 描いていないプロジェクトを開くだけで GPU に触らない
+            if (layers is null && _paint.IsPristine)
+                return;
+            _paint.SetLayers(layers);
+        }
     }
 
     /// <summary>元の画像に描いた内容を重ねた結果を読み戻す。何も描いていなければ null。</summary>
@@ -252,16 +282,17 @@ public sealed class RenderEngine : IDisposable
         }
     }
 
-    /// <summary>編集レイヤーを読み戻す (保存用)。何も描いていなければ null。</summary>
-    public ImageData? ReadPaintLayer()
+    /// <summary>レイヤーを読み戻す (保存用)。何もしていなければ null。</summary>
+    public IReadOnlyList<LayerData>? ReadLayers()
     {
         lock (_sync)
         {
             // 何もしていないプロジェクトの保存では GPU に触らない
-            if (!_paint.HasPaint && _paintCommands.IsEmpty)
+            if (_paint.IsPristine && _paintCommands.IsEmpty)
                 return null;
             EnsureSourceReady();
-            return _paint.ReadLayer();
+            _paint.CommitEdit();
+            return _paint.IsPristine ? null : _paint.ReadLayers();
         }
     }
 

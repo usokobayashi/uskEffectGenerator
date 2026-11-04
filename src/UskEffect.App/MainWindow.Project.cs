@@ -296,7 +296,7 @@ public partial class MainWindow
         Export = new ExportSettings { Channels = (ExportChannels)Math.Max(0, Top.ExportChannelsBox.SelectedIndex) },
         Source = new SourceSettings { Kind = NoiseTab.UseImage ? SourceKind.Image : SourceKind.Noise, ImageName = _imageName },
         Image = _image,
-        PaintLayer = _engine?.ReadPaintLayer(),
+        Layers = _engine?.ReadLayers(),
     };
 
     internal void ApplyDocument(ProjectDocument document)
@@ -327,8 +327,9 @@ public partial class MainWindow
         _engine?.Timeline.Stop();
         if (_engine is not null)
             _engine.View = new CanvasView();
-        _engine?.SetPaintLayer(document.PaintLayer);
+        _engine?.SetLayers(document.Layers);
         ApplySource();
         ApplySettings();
+        RefreshLayers();
     }
 }

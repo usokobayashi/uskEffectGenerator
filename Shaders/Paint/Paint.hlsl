@@ -174,19 +174,26 @@ float4 PSSeamBlend(FullOutput input) : SV_Target
     return lerp(float4(a.rgb * a.a, a.a), float4(b.rgb * b.a, b.a), mixAmount);
 }
 
-float4 PSComposite(FullOutput input) : SV_Target
+// 合成の 1 段目: 元の画像を乗算済みにして敷く
+float4 PSSourcePremultiplied(FullOutput input) : SV_Target
 {
-    int3 texel = int3(input.Position.xy, 0);
-    float4 layer = Layer.Load(texel);
-    float4 source = Source.Load(texel);
+    float4 source = Source.Load(int3(input.Position.xy, 0));
     if (SourceIsColor == 0)
-        source = float4(source.rrr, 1);
+        return float4(source.rrr, 1);
+    return float4(source.rgb * source.a, source.a);
+}
 
-    float below = source.a * (1.0 - layer.a);
-    float alpha = layer.a + below;
-    if (alpha <= 0.0)
-        return 0;
-    return float4((layer.rgb + source.rgb * below) / alpha, alpha);
+// 合成の 2 段目: レイヤーを下から順に重ねる。Flow にレイヤーの不透明度が入る
+float4 PSLayerOver(FullOutput input) : SV_Target
+{
+    return Layer.Load(int3(input.Position.xy, 0)) * Flow;
+}
+
+// 合成の 3 段目: 乗算なしへ戻す (読み込んだ画像と同じ扱いにする)
+float4 PSStraighten(FullOutput input) : SV_Target
+{
+    float4 c = Layer.Load(int3(input.Position.xy, 0));
+    return c.a > 0.0 ? float4(c.rgb / c.a, c.a) : float4(0, 0, 0, 0);
 }
 
 // 大きさが変わったレイヤーの引き継ぎ

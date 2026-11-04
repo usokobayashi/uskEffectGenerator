@@ -24,11 +24,14 @@ public static class ProjectFile
 
     /// <summary>形式を変えたら上げる。読込時、これより新しい形式は拒否する。</summary>
     /// 1: 設定のみ。2: 読み込んだ画像を images/source.png に保存。3: 描いた内容を images/paint.png に保存。
-    public const int CurrentFormatVersion = 3;
+    /// 4: 複数のレイヤー。設定は project.json、画素は images/layer{番号}.png。
+    public const int CurrentFormatVersion = 4;
 
     private const string JsonEntryName = "project.json";
     private const string ImageEntryName = "images/source.png";
-    private const string PaintEntryName = "images/paint.png";
+    private const string LegacyPaintEntryName = "images/paint.png";
+
+    private static string LayerEntryName(int index) => $"images/layer{index}.png";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -57,8 +60,11 @@ public static class ProjectFile
 
             if (document.Image is { } image)
                 WriteImage(zip, ImageEntryName, image);
-            if (document.PaintLayer is { } paint)
-                WriteImage(zip, PaintEntryName, paint);
+            for (int i = 0; document.Layers is { } layers && i < layers.Count; i++)
+            {
+                if (layers[i].Image is { } layerImage)
+                    WriteImage(zip, LayerEntryName(i), layerImage);
+            }
         }
         File.Move(temp, path, overwrite: true);
     }
@@ -81,6 +87,18 @@ public static class ProjectFile
         return ImageLoader.DecodeWithWic(buffer.ToArray());
     }
 
+    private static IReadOnlyList<UskEffect.Graphics.Painting.LayerData>? ReadLayers(
+        ZipArchive zip, IReadOnlyList<UskEffect.Graphics.Painting.LayerData>? layers)
+    {
+        if (layers is not null)
+            return layers.Select((layer, i) => layer with { Image = ReadImage(zip, LayerEntryName(i)) }).ToArray();
+
+        // 形式 3 までは描いた内容が 1 枚だけ
+        return ReadImage(zip, LegacyPaintEntryName) is { } legacy
+            ? [new UskEffect.Graphics.Painting.LayerData { Name = "レイヤー 1", Image = legacy }]
+            : null;
+    }
+
     public static ProjectDocument Load(string path)
     {
         try
@@ -99,7 +117,7 @@ public static class ProjectFile
             json.Remove("application");
             var document = json.Deserialize<ProjectDocument>(JsonOptions) ?? new ProjectDocument();
 
-            return document with { Image = ReadImage(zip, ImageEntryName), PaintLayer = ReadImage(zip, PaintEntryName) };
+            return document with { Image = ReadImage(zip, ImageEntryName), Layers = ReadLayers(zip, document.Layers) };
         }
         catch (InvalidDataException ex)
         {

@@ -571,6 +571,73 @@ public sealed class UiTests(UiSession ui) : IClassFixture<UiSession>
         CloseWindow(window);
     });
 
+    [Fact]
+    public Task LayerPanel_ShowsAndChangesTheLayers_AndUndoRestores() => ui.Run(() =>
+    {
+        var window = Open();
+        Assert.Single(window.LayerTab.LayerList.Children);
+        Assert.False(window.LayerTab.DeleteButton.IsEnabled);
+        Assert.False(window.Top.UndoButton.IsEnabled);
+
+        window.LayerTab.AddButton.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Settle();
+        Assert.Equal(2, window.LayerTab.LayerList.Children.Count);
+        Assert.True(window.LayerTab.DeleteButton.IsEnabled);
+        Assert.True(window.Top.UndoButton.IsEnabled);
+        Assert.True(window.LayerTab.MoveDownButton.IsEnabled);
+        Assert.False(window.LayerTab.MoveUpButton.IsEnabled);
+        Assert.Contains("*", window.Title);
+
+        window.LayerTab.OpacityField.Value = 0.5;
+        Settle();
+        Assert.Contains("50%", ((TextBlock)((Grid)((Border)window.LayerTab.LayerList.Children[0]).Child!).Children[2]).Text);
+
+        window.Top.UndoButton.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Settle();
+        Assert.Equal(1, window.LayerTab.OpacityField.Value);
+
+        window.Top.UndoButton.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Settle();
+        Assert.Single(window.LayerTab.LayerList.Children);
+        Assert.False(window.Top.UndoButton.IsEnabled);
+        Assert.True(window.Top.RedoButton.IsEnabled);
+
+        window.Top.RedoButton.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Settle();
+        Assert.Equal(2, window.LayerTab.LayerList.Children.Count);
+        CloseWindow(window);
+    });
+
+    [Fact]
+    public Task Document_RestoresLayers_AndNewProjectResets() => ui.Run(() =>
+    {
+        var window = Open();
+        window.ApplyDocument(new ProjectDocument
+        {
+            Layers =
+            [
+                new UskEffect.Graphics.Painting.LayerData { Name = "下" },
+                new UskEffect.Graphics.Painting.LayerData { Name = "上", Visible = false, Opacity = 0.25f },
+            ],
+        });
+        Settle();
+        Assert.Equal(2, window.LayerTab.LayerList.Children.Count);
+
+        window.ApplyDocument(new ProjectDocument());
+        Settle();
+        Assert.Single(window.LayerTab.LayerList.Children);
+        Assert.Null(window.BuildDocument().Layers);
+        CloseWindow(window);
+    });
+
+    [Fact]
+    public void PenPressure_IsNormalized_AndMissingPressureCountsAsFull()
+    {
+        Assert.Equal(0.5, UskEffect.App.Interop.Win32.NormalizePenPressure(1, 512), 6);
+        Assert.Equal(1, UskEffect.App.Interop.Win32.NormalizePenPressure(1, 4096), 6);
+        Assert.Equal(1, UskEffect.App.Interop.Win32.NormalizePenPressure(0, 0), 6);
+    }
+
     private static void WaitFor(Task task)
     {
         var limit = DateTime.UtcNow.AddSeconds(10);

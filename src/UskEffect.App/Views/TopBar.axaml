@@ -19,8 +19,8 @@
             <MenuItem x:Name="ExitMenuItem" Header="{DynamicResource S.Menu.Exit}" />
           </MenuItem>
           <MenuItem Header="{DynamicResource S.Menu.Edit}">
-            <MenuItem Header="{DynamicResource S.Menu.Undo}" InputGesture="Ctrl+Z" IsEnabled="False" />
-            <MenuItem Header="{DynamicResource S.Menu.Redo}" InputGesture="Ctrl+Y" IsEnabled="False" />
+            <MenuItem x:Name="UndoMenuItem" Header="{DynamicResource S.Menu.Undo}" InputGesture="Ctrl+Z" IsEnabled="False" />
+            <MenuItem x:Name="RedoMenuItem" Header="{DynamicResource S.Menu.Redo}" InputGesture="Ctrl+Y" IsEnabled="False" />
           </MenuItem>
           <MenuItem Header="{DynamicResource S.Menu.View}">
             <MenuItem x:Name="ViewRectMenuItem" Header="{DynamicResource S.View.Rect}" />
@@ -61,10 +61,10 @@
             </Flyout>
           </Button.Flyout>
         </Button>
-        <Button Classes="ico" IsEnabled="False" ToolTip.Tip="{DynamicResource S.Top.Undo}" AutomationProperties.Name="{DynamicResource S.Top.Undo}">
+        <Button x:Name="UndoButton" Classes="ico" IsEnabled="False" ToolTip.Tip="{DynamicResource S.Top.Undo}" AutomationProperties.Name="{DynamicResource S.Top.Undo}">
           <Path Classes="stroke icon" Data="{StaticResource Icon.Undo}" />
         </Button>
-        <Button Classes="ico" IsEnabled="False" ToolTip.Tip="{DynamicResource S.Top.Redo}" AutomationProperties.Name="{DynamicResource S.Top.Redo}">
+        <Button x:Name="RedoButton" Classes="ico" IsEnabled="False" ToolTip.Tip="{DynamicResource S.Top.Redo}" AutomationProperties.Name="{DynamicResource S.Top.Redo}">
           <Path Classes="stroke icon" Data="{StaticResource Icon.Redo}" />
         </Button>
       </StackPanel>

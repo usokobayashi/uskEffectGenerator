@@ -12,6 +12,9 @@ internal interface IHostWindowInput
     void OnPointerMoved(int x, int y);
     void OnPointerUp(int button, int x, int y);
     void OnWheel(int delta, int x, int y);
+
+    /// <summary>続く通知がペンのものなら筆圧 (0..1)。マウスなら null。</summary>
+    void OnPenPressure(double? pressure);
 }
 
 /// <summary>D3D11 スワップチェーンを載せる子ウィンドウ用の最小限の Win32 API。</summary>
@@ -37,6 +40,13 @@ internal static class Win32
     private const int VK_CONTROL = 0x11;
     private const int VK_SPACE = 0x20;
     private const int IDC_SIZEALL = 32646;
+    private const uint WM_POINTERUPDATE = 0x0245;
+    private const uint WM_POINTERDOWN = 0x0246;
+    private const uint WM_POINTERUP = 0x0247;
+    private const uint PT_PEN = 3;
+    private const uint POINTER_FLAG_INCONTACT = 0x00000004;
+    private const uint PEN_MASK_PRESSURE = 0x00000001;
+    private const double MaxPenPressure = 1024;
     private const uint WM_MOUSELEAVE = 0x02A3;
     private const uint TME_LEAVE = 0x00000002;
     private const int IDC_ARROW = 32512;
@@ -125,10 +135,47 @@ internal static class Win32
         return GetClientRect(hwnd, out var rect) ? (rect.Right - rect.Left, rect.Bottom - rect.Top) : (0, 0);
     }
 
+    /// <summary>筆圧を 0..1 にする。筆圧を送らないペンは 1 として扱う。</summary>
+    internal static double NormalizePenPressure(uint penMask, uint pressure) =>
+        (penMask & PEN_MASK_PRESSURE) == 0 ? 1 : Math.Clamp(pressure / MaxPenPressure, 0, 1);
+
+    // ペンを WM_POINTER で受ける (FR-18)。処理したらマウスの通知は来ない。ペン以外は既定の処理でマウスの通知になる
+    private static bool HandlePen(IntPtr hwnd, uint msg, IntPtr wParam)
+    {
+        uint id = (uint)(wParam.ToInt64() & 0xFFFF);
+        if (!s_inputs.TryGetValue(hwnd, out var input) || !GetPointerType(id, out uint type) || type != PT_PEN
+            || !GetPointerPenInfo(id, out var pen))
+            return false;
+
+        var point = pen.PointerInfo.PixelLocation;
+        ScreenToClient(hwnd, ref point);
+        input.OnPenPressure(NormalizePenPressure(pen.PenMask, pen.Pressure));
+        switch (msg)
+        {
+            case WM_POINTERDOWN:
+                input.OnPointerDown(0, point.X, point.Y);
+                break;
+            case WM_POINTERUP:
+                input.OnPointerUp(0, point.X, point.Y);
+                input.OnClicked();
+                input.OnPenPressure(null);
+                break;
+            default:
+                // 浮かせている間は押していないので、筆圧の通知を消す
+                if ((pen.PointerInfo.PointerFlags & POINTER_FLAG_INCONTACT) == 0)
+                    input.OnPenPressure(null);
+                input.OnPointerMoved(point.X, point.Y);
+                break;
+        }
+        return true;
+    }
+
     private static IntPtr HostWndProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam)
     {
         switch (msg)
         {
+            case WM_POINTERDOWN or WM_POINTERUPDATE or WM_POINTERUP:
+                return HandlePen(hwnd, msg, wParam) ? IntPtr.Zero : DefWindowProc(hwnd, msg, wParam, lParam);
             case WM_ERASEBKGND:
                 return 1; // 背景はスワップチェーンが描くのでちらつき防止に消去しない
             case WM_PAINT:
@@ -225,6 +272,45 @@ internal static class Win32
         public int X;
         public int Y;
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINTER_INFO
+    {
+        public uint PointerType;
+        public uint PointerId;
+        public uint FrameId;
+        public uint PointerFlags;
+        public IntPtr SourceDevice;
+        public IntPtr HwndTarget;
+        public POINT PixelLocation;
+        public POINT HimetricLocation;
+        public POINT PixelLocationRaw;
+        public POINT HimetricLocationRaw;
+        public uint Time;
+        public uint HistoryCount;
+        public int InputData;
+        public uint KeyStates;
+        public ulong PerformanceCount;
+        public int ButtonChangeType;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINTER_PEN_INFO
+    {
+        public POINTER_INFO PointerInfo;
+        public uint PenFlags;
+        public uint PenMask;
+        public uint Pressure;
+        public uint Rotation;
+        public int TiltX;
+        public int TiltY;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool GetPointerType(uint pointerId, out uint pointerType);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetPointerPenInfo(uint pointerId, out POINTER_PEN_INFO penInfo);
 
     [DllImport("user32.dll")]
     private static extern bool TrackMouseEvent(ref TRACKMOUSEEVENT track);

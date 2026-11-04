@@ -19,7 +19,11 @@ public partial class MainWindow
     private bool IsPaintMode => Top.ModeSegment.SelectedIndex == 1;
 
     // エフェクトの表示は動いていて画素と対応しない。自動ブレンドの確認中は描くと取り消せなくなる
-    private bool CanPaint => IsPaintMode && Strip.Mode != PreviewMode.Effect && !_seamBlendPreviewing;
+    private bool CanPaint => IsPaintMode && Strip.Mode != PreviewMode.Effect && !_seamBlendPreviewing && IsActiveLayerVisible;
+
+    // 見えないレイヤーに描くと結果が分からないので描かせない
+    private bool IsActiveLayerVisible =>
+        _engine is null || _engine.Layers.FirstOrDefault(l => l.Id == _engine.ActiveLayerId)?.Visible != false;
 
     internal BrushSettings CurrentBrush => Strip.ReadBrush(Rail.Tool);
 
@@ -29,9 +33,23 @@ public partial class MainWindow
 
         Top.ModeSegment.SelectionChanged += (_, _) => ApplyPaintMode();
         Rail.ToolChanged += () => Strip.Tool = Rail.Tool;
-        Strip.ClearPaintRequested += async () => await ClearPaintAsync();
+        Strip.ClearPaintRequested += ClearActiveLayer;
         Strip.Changed += ShowPaintAvailability;
         AddHandler(KeyDownEvent, OnPaintKeyDown, RoutingStrategies.Tunnel);
+        AddHandler(KeyDownEvent, OnUndoKeyDown, RoutingStrategies.Tunnel);
+
+        Top.UndoMenuItem.Click += (_, _) => UndoOrRedo(undo: true);
+        Top.UndoButton.Click += (_, _) => UndoOrRedo(undo: true);
+        Top.RedoMenuItem.Click += (_, _) => UndoOrRedo(undo: false);
+        Top.RedoButton.Click += (_, _) => UndoOrRedo(undo: false);
+
+        LayerTab.LayerSelected += id => ChangeLayers(() => _engine!.SetActiveLayer(id), dirty: false);
+        LayerTab.VisibleToggled += (id, visible) => ChangeLayers(() => _engine!.SetLayerVisible(id, visible));
+        LayerTab.OpacityChanged += (id, opacity) => ChangeLayers(() => _engine!.SetLayerOpacity(id, opacity));
+        LayerTab.AddRequested += () => ChangeLayers(() => _engine!.AddLayer());
+        LayerTab.RemoveRequested += id => ChangeLayers(() => _engine!.RemoveLayer(id));
+        LayerTab.MoveRequested += (id, delta) => ChangeLayers(() => _engine!.MoveLayer(id, delta));
+        RefreshLayers();
 
         SeamTab.ManualFixRequested += StartManualSeamFix;
         SeamTab.BlendStarted += StartSeamBlend;
@@ -45,6 +63,58 @@ public partial class MainWindow
         };
 
         ApplyPaintMode();
+    }
+
+    private void ChangeLayers(Action change, bool dirty = true)
+    {
+        change();
+        RefreshLayers();
+        if (dirty)
+            MarkDirty();
+        ShowPaintAvailability();
+    }
+
+    private void RefreshLayers()
+    {
+        if (_engine is null)
+            return;
+        LayerTab.Show(_engine.Layers, _engine.ActiveLayerId);
+        RefreshUndoButtons();
+    }
+
+    private void RefreshUndoButtons()
+    {
+        if (_engine is null)
+            return;
+        Top.UndoButton.IsEnabled = Top.UndoMenuItem.IsEnabled = _engine.CanUndo;
+        Top.RedoButton.IsEnabled = Top.RedoMenuItem.IsEnabled = _engine.CanRedo;
+    }
+
+    private void UndoOrRedo(bool undo)
+    {
+        if (_engine is null || _seamBlendPreviewing)
+            return;
+        if (undo)
+            _engine.Undo();
+        else
+            _engine.Redo();
+        RefreshLayers();
+        MarkDirty();
+    }
+
+    // メニューの HotKey にすると、数値の入力中の Ctrl+Z まで奪うのでここで受ける
+    private void OnUndoKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (FocusManager?.GetFocusedElement() is TextBox)
+            return;
+
+        bool undo = e.Key == Key.Z && e.KeyModifiers == KeyModifiers.Control;
+        bool redo = (e.Key == Key.Y && e.KeyModifiers == KeyModifiers.Control)
+            || (e.Key == Key.Z && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift));
+        if (!undo && !redo)
+            return;
+        UndoOrRedo(undo);
+        e.Handled = true;
     }
 
     // 継ぎ目を中央に寄せた表示のまま描くと、端をまたいで手で直せる
@@ -61,6 +131,7 @@ public partial class MainWindow
         _seamBlendPreviewing = true;
         Top.IsEnabled = false;
         NoiseTab.IsEnabled = false;
+        LayerTab.IsEnabled = false;
         Strip.Mode = PreviewMode.SeamCheck;
         _engine?.Cursor = null;
         _engine?.PreviewSeamBlend(SeamTab.ReadBlend());
@@ -71,6 +142,7 @@ public partial class MainWindow
         _seamBlendPreviewing = false;
         Top.IsEnabled = true;
         NoiseTab.IsEnabled = true;
+        LayerTab.IsEnabled = true;
         SeamTab.ShowBlendControls(false);
         if (apply)
         {
@@ -98,19 +170,19 @@ public partial class MainWindow
 
     private void ShowPaintAvailability()
     {
-        if (IsPaintMode && Strip.Mode == PreviewMode.Effect)
-        {
-            Status.ShowMessage(Loc.T("S.Paint.NotInEffect"));
-            if (_engine is not null)
-                _engine.Cursor = null;
-        }
+        if (!IsPaintMode)
+            return;
+        string? message = Strip.Mode == PreviewMode.Effect ? "S.Paint.NotInEffect" : !IsActiveLayerVisible ? "S.Paint.LayerHidden" : null;
+        if (message is null)
+            return;
+        Status.ShowMessage(Loc.T(message));
+        if (_engine is not null)
+            _engine.Cursor = null;
     }
 
-    private async Task ClearPaintAsync()
+    private void ClearActiveLayer()
     {
-        if (_engine is null || !await Dialogs.ConfirmAsync(this, Loc.T("S.Paint.ClearTitle"), Loc.T("S.Paint.ClearBody"), Loc.T("S.Paint.Clear")))
-            return;
-        _engine.ClearPaint();
+        _engine?.ClearActiveLayer();
         MarkDirty();
     }
 

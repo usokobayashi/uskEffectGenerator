@@ -33,6 +33,14 @@
                 <ui:SwitchButton x:Name="BrushWrapSwitch" DockPanel.Dock="Right" VerticalAlignment="Center" IsChecked="True" />
                 <TextBlock Text="{DynamicResource S.Brush.Wrap}" VerticalAlignment="Center" />
               </DockPanel>
+              <DockPanel>
+                <ui:SwitchButton x:Name="PressureSizeSwitch" DockPanel.Dock="Right" VerticalAlignment="Center" IsChecked="True" />
+                <TextBlock Text="{DynamicResource S.Brush.PressureSize}" VerticalAlignment="Center" />
+              </DockPanel>
+              <DockPanel>
+                <ui:SwitchButton x:Name="PressureOpacitySwitch" DockPanel.Dock="Right" VerticalAlignment="Center" />
+                <TextBlock Text="{DynamicResource S.Brush.PressureOpacity}" VerticalAlignment="Center" />
+              </DockPanel>
               <Button x:Name="ClearPaintButton" Classes="btn" Content="{DynamicResource S.Paint.ClearMenu}" HorizontalAlignment="Right" />
             </StackPanel>
           </Flyout>

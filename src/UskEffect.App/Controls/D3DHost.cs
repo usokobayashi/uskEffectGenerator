@@ -30,6 +30,11 @@ public sealed class D3DHost : NativeControlHost, IHostWindowInput
 
     public bool IsPointerOverHost { get; private set; }
 
+    /// <summary>ペンで押している間の筆圧 (0..1)。マウスなら null。</summary>
+    public double? PenPressure { get; private set; }
+
+    void IHostWindowInput.OnPenPressure(double? pressure) => PenPressure = pressure;
+
     void IHostWindowInput.OnPointerDown(int button, int x, int y) => HostPointerDown?.Invoke(button, x, y);
     void IHostWindowInput.OnPointerMoved(int x, int y) => HostPointerMoved?.Invoke(x, y);
     void IHostWindowInput.OnPointerUp(int button, int x, int y) => HostPointerUp?.Invoke(button, x, y);

@@ -80,10 +80,10 @@
   <x:String x:Key="S.Brush.Hardness">硬さ</x:String>
   <x:String x:Key="S.Brush.Opacity">濃さ</x:String>
   <x:String x:Key="S.Brush.Color">色</x:String>
-  <x:String x:Key="S.Paint.ClearMenu">描いた内容を消去...</x:String>
-  <x:String x:Key="S.Paint.ClearTitle">描いた内容を消去</x:String>
-  <x:String x:Key="S.Paint.ClearBody">描いた内容をすべて消します。元のノイズや画像は残ります。この操作は元に戻せません。</x:String>
-  <x:String x:Key="S.Paint.Clear">消去する</x:String>
+  <x:String x:Key="S.Paint.ClearMenu">このレイヤーを消去</x:String>
+  <x:String x:Key="S.Paint.LayerHidden">表示していないレイヤーには描けません。</x:String>
+  <x:String x:Key="S.Brush.PressureSize">筆圧で大きさを変える</x:String>
+  <x:String x:Key="S.Brush.PressureOpacity">筆圧で濃さを変える</x:String>
   <x:String x:Key="S.Paint.NotInEffect">エフェクトの表示では描けません。矩形・極座標・シームの表示で描けます。</x:String>
   <x:String x:Key="S.Brush.Wrap">端をつなげて描く</x:String>
 
@@ -201,11 +201,13 @@
   <x:String x:Key="S.Color.Hex">色の 16 進値</x:String>
 
   <!-- レイヤー -->
-  <x:String x:Key="S.Layer.Noise">ノイズ（生成）</x:String>
-  <x:String x:Key="S.Layer.ToggleVisible">ノイズの表示切替</x:String>
+  <x:String x:Key="S.Layer.Source">元の画像（ノイズ・読み込み）</x:String>
+  <x:String x:Key="S.Layer.ToggleVisible">レイヤーの表示切替</x:String>
   <x:String x:Key="S.Layer.Add">追加</x:String>
   <x:String x:Key="S.Layer.Delete">削除</x:String>
-  <x:String x:Key="S.Layer.Note">レイヤーはペイント機能と一緒に使えるようになります。</x:String>
+  <x:String x:Key="S.Layer.MoveUp">上へ</x:String>
+  <x:String x:Key="S.Layer.MoveDown">下へ</x:String>
+  <x:String x:Key="S.Layer.Opacity">不透明度</x:String>
 
   <!-- タイムライン -->
   <x:String x:Key="S.Timeline.Play">再生</x:String>
