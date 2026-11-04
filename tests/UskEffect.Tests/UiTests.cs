@@ -517,13 +517,18 @@ public sealed class UiTests(UiSession ui) : IClassFixture<UiSession>
         Assert.False(window.Rail.BrushToolButton.IsEnabled);
         Assert.False(window.Strip.BrushButton.IsVisible);
 
-        window.Strip.Mode = UskEffect.Graphics.PreviewMode.Polar;
+        window.Strip.Mode = UskEffect.Graphics.PreviewMode.Effect;
         window.Top.ModeSegment.SelectedIndex = 1;
         Settle();
 
         Assert.True(window.Rail.BrushToolButton.IsEnabled);
         Assert.True(window.Strip.BrushButton.IsVisible);
         Assert.Equal(UskEffect.Graphics.PreviewMode.Rect, window.Strip.Mode);
+
+        // 極座標とシームの表示のまま描ける
+        window.Strip.Mode = UskEffect.Graphics.PreviewMode.Polar;
+        Settle();
+        Assert.Equal(UskEffect.Graphics.PreviewMode.Polar, window.Strip.Mode);
 
         window.Rail.EraserToolButton.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
         Settle();
@@ -536,6 +541,33 @@ public sealed class UiTests(UiSession ui) : IClassFixture<UiSession>
         window.Top.ModeSegment.SelectedIndex = 0;
         Settle();
         Assert.False(window.Rail.BrushToolButton.IsEnabled);
+        CloseWindow(window);
+    });
+
+    [Fact]
+    public Task SeamFix_Buttons_SwitchToOffsetView_AndBlendLocksFileOperations() => ui.Run(() =>
+    {
+        var window = Open();
+        window.TabSegment.SelectedIndex = 1;
+        Settle();
+
+        window.SeamTab.ManualFixButton.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Settle();
+        Assert.Equal(1, window.Top.ModeSegment.SelectedIndex);
+        Assert.Equal(UskEffect.Graphics.PreviewMode.SeamCheck, window.Strip.Mode);
+
+        window.SeamTab.BlendButton.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Settle();
+        Assert.True(window.SeamTab.BlendControls.IsVisible);
+        Assert.False(window.SeamTab.FixButtons.IsVisible);
+        Assert.False(window.Top.IsEnabled);
+        Assert.False(window.NoiseTab.IsEnabled);
+
+        window.SeamTab.BlendCancelButton.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Settle();
+        Assert.False(window.SeamTab.BlendControls.IsVisible);
+        Assert.True(window.Top.IsEnabled);
+        Assert.True(window.NoiseTab.IsEnabled);
         CloseWindow(window);
     });
 

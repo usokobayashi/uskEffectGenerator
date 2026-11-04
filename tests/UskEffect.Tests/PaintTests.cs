@@ -106,6 +106,73 @@ public sealed class CanvasMappingTests
     [Fact]
     public void Wrap_NegativeValuesComeBackInside() =>
         Assert.Equal(new PaintDab(502, 2), Map().Wrap(-10, 514));
+
+    private static PolarCanvasMapping Polar(PolarSettings settings, CanvasView? view = null, double tiling = 1) =>
+        new(1024, 1024, 512, 512, 12, view ?? new CanvasView(), settings, tiling, tiling, 0, 0);
+
+    [Theory]
+    [InlineData(0.3f, 1f, 0f, false, false)]
+    [InlineData(0.3f, 1f, 45f, false, false)]
+    [InlineData(0.2f, 0.9f, 90f, true, false)]
+    [InlineData(0.2f, 0.9f, 10f, false, true)]
+    [InlineData(0f, 1f, 200f, true, true)]
+    public void Polar_MatchesPolarMapping(float inner, float outer, float rotation, bool flipAngular, bool flipRadial)
+    {
+        var settings = new PolarSettings(inner, outer, rotation, flipAngular, flipRadial);
+        var mapping = Polar(settings);
+        foreach (var uv in new[] { new Vector2(0.1f, 0.2f), new Vector2(0.5f, 0.5f), new Vector2(0.9f, 0.8f) })
+        {
+            // キャンバス → 画面 (外接円の半径は 500 画素、y 下向き)
+            var canvas = PolarMapping.UvToCanvas(uv, settings);
+            var (strokeX, strokeY) = mapping.ToStrokeSpace(512 + canvas.X * 500, 512 - canvas.Y * 500);
+            var dab = mapping.ToDab(strokeX, strokeY, new BrushSettings())!.Value;
+            Assert.Equal(uv.X * 512, dab.X, 1);
+            Assert.Equal(uv.Y * 512, dab.Y, 1);
+            Assert.Equal(canvas.Length(), dab.PolarRadius, 3);
+        }
+    }
+
+    [Fact]
+    public void Polar_OutsideTheRing_CannotStart_ButABrushOverlappingItStillPaints()
+    {
+        var mapping = Polar(new PolarSettings(0.5f, 0.8f));
+        var inRing = mapping.ToStrokeSpace(512 + 300, 512);
+        Assert.True(mapping.CanStartAt(inRing.X, inRing.Y));
+
+        // 半径 0.84。リングの外だが、比率 0.1 のブラシは外径に届く
+        var near = mapping.ToStrokeSpace(512 + 420, 512);
+        Assert.False(mapping.CanStartAt(near.X, near.Y));
+        Assert.NotNull(mapping.ToDab(near.X, near.Y, new BrushSettings { Size = 51.2 }));
+
+        var far = mapping.ToStrokeSpace(512 + 490, 512);
+        Assert.Null(mapping.ToDab(far.X, far.Y, new BrushSettings { Size = 8 }));
+    }
+
+    [Fact]
+    public void Polar_Stroke_InterpolatesOnTheCanvas_AcrossThe360DegreeSeam()
+    {
+        // +x 軸 (u = 0) を上から下へまたぐ。テクスチャ座標で補間すると反対側を通ってしまう
+        var mapping = Polar(new PolarSettings(0.3f, 1f));
+        var brush = new BrushSettings { Size = 16 };
+        var interpolator = new StrokeInterpolator(brush.Spacing);
+        var start = mapping.ToStrokeSpace(512 + 300, 512 - 20);
+        var end = mapping.ToStrokeSpace(512 + 300, 512 + 20);
+        var points = new List<(double X, double Y)> { interpolator.Begin(start.X, start.Y) };
+        interpolator.MoveTo(end.X, end.Y, points);
+
+        var dabs = points.Select(p => mapping.ToDab(p.X, p.Y, brush)!.Value).ToArray();
+        Assert.All(dabs, d => Assert.True(d.X < 25 || d.X > 512 - 25));
+        Assert.Contains(dabs, d => d.X < 25);
+        Assert.Contains(dabs, d => d.X > 512 - 25);
+    }
+
+    [Fact]
+    public void SeamView_OffsetsByHalfATile()
+    {
+        var mapping = new CanvasMapping(1024, 1024, 512, 512, 12, new CanvasView(), 1, 1, 0.5, 0.5);
+        var (x, y) = mapping.ToStrokeSpace(512, 512);
+        Assert.Equal(new PaintDab(0, 0), mapping.ToDab(x, y, new BrushSettings()));
+    }
 }
 
 public sealed unsafe class PaintCursorTests
@@ -306,6 +373,179 @@ public sealed class PaintRenderTests : IDisposable
         var image = _engine.ReadComposite()!;
         Assert.Equal((255, 0, 0, 255), At(image, 16, 16));
         Assert.Equal((255, 255, 255, 255), At(image, 60, 60));
+    }
+
+    [Fact]
+    public void Wrap_ContinuesOnTheOppositeEdge()
+    {
+        _engine.SetImageSource(Split(64));
+        _engine.Paint(Red with { Size = 16 }, [new PaintDab(2, 62)]);
+
+        var image = _engine.ReadComposite()!;
+        Assert.Equal((255, 0, 0, 255), At(image, 2, 62));
+        Assert.Equal((255, 0, 0, 255), At(image, 60, 62));
+        Assert.Equal((255, 0, 0, 255), At(image, 2, 2));
+        Assert.Equal((255, 0, 0, 255), At(image, 60, 2));
+        Assert.Equal(0, At(image, 20, 32).R);
+    }
+
+    [Fact]
+    public void WrapOff_StopsAtTheEdge()
+    {
+        _engine.SetImageSource(Split(64));
+        _engine.Paint(Red with { Size = 16, Wrap = false }, [new PaintDab(2, 32)]);
+
+        var image = _engine.ReadComposite()!;
+        Assert.Equal((255, 0, 0, 255), At(image, 2, 32));
+        Assert.Equal((255, 255, 255, 255), At(image, 60, 32));
+    }
+
+    [Fact]
+    public void Blur_WithWrap_ReadsAcrossTheEdge()
+    {
+        // 左端は黒で、向こう側の右端は白。またいで読めば左端の列が明るくなる
+        _engine.SetImageSource(Split(64));
+        _engine.Paint(Red with { Tool = PaintTool.Blur, Size = 24 }, [new PaintDab(0, 32)]);
+        Assert.InRange(At(_engine.ReadComposite()!, 0, 32).R, 40, 215);
+    }
+
+    [Fact]
+    public void Blur_WithoutWrap_StaysOnItsSide()
+    {
+        _engine.SetImageSource(Split(64));
+        _engine.Paint(Red with { Tool = PaintTool.Blur, Size = 24, Wrap = false }, [new PaintDab(0, 32)]);
+        Assert.Equal(0, At(_engine.ReadComposite()!, 0, 32).R);
+    }
+
+    // リング全体が見える極座標。64×64 なのでブラシの比率は Size / 64
+    private static readonly PolarStamp Ring = new(0.25, 0.75, false, 1, 1, 64);
+
+    [Fact]
+    public void Polar_KeepsTheCircle_OnTheCanvas()
+    {
+        _engine.SetImageSource(Split(64));
+        // 半径 0.5 (v = 0.5) に、比率 0.25 のブラシ。u = 0.25 → 64 × 0.25 = 16
+        _engine.Paint(Red with { Size = 16 }, [new PaintDab(16, 32, 0.5)], Ring);
+
+        var image = _engine.ReadComposite()!;
+        Assert.Equal((255, 0, 0, 255), At(image, 16, 32));
+
+        // 内径側へ 30 画素は半径 0.234 離れた点で、ブラシの半径 0.25 の内側
+        Assert.Equal((255, 0, 0, 255), At(image, 16, 32 - 30));
+
+        // 同じ半径の円周上では、角度 ±29° (弦の長さ 0.25) がブラシの端。テクスチャでは 0.08 で約 5 画素
+        Assert.Equal((255, 0, 0, 255), At(image, 16 + 4, 32));
+        Assert.Equal(0, At(image, 16 + 7, 32).G);
+        Assert.NotEqual(255, At(image, 16 + 7, 32).R);
+    }
+
+    [Fact]
+    public void Polar_CrossesThe360DegreeSeam_WithoutABreak()
+    {
+        _engine.SetImageSource(Split(64));
+        _engine.Paint(Red with { Size = 16 }, [new PaintDab(0, 32, 0.5)], Ring);
+
+        var image = _engine.ReadComposite()!;
+        Assert.Equal((255, 0, 0, 255), At(image, 1, 32));
+        Assert.Equal((255, 0, 0, 255), At(image, 62, 32));
+        Assert.Equal(0, At(image, 32, 32).R == 255 && At(image, 32, 32).G == 0 ? 1 : 0);
+    }
+
+    [Fact]
+    public void Polar_MasksOutsideTheRing()
+    {
+        _engine.SetImageSource(Split(64));
+
+        // 外径のすぐ外の中心。v の折り返しで反対の端 (内径側) に描いてはいけない
+        _engine.Paint(Red with { Size = 8 }, [new PaintDab(16, 2, 0.8)], Ring);
+        var image = _engine.ReadComposite()!;
+        Assert.Equal(0, At(image, 16, 60).R == 255 && At(image, 16, 60).G == 0 ? 1 : 0);
+    }
+
+    [Fact]
+    public void Polar_DiscCenter_FillsEveryAngle()
+    {
+        _engine.SetImageSource(Split(64));
+        var disc = new PolarStamp(0, 1, false, 1, 1, 64);
+        _engine.Paint(Red with { Size = 8 }, [new PaintDab(0, 0, 0)], disc);
+
+        // 中心では角度が不定なので、v の小さい行はどの角度も塗られる
+        var image = _engine.ReadComposite()!;
+        foreach (int x in new[] { 0, 16, 32, 48, 63 })
+            Assert.Equal((255, 0, 0, 255), At(image, x, 2));
+    }
+
+    [Fact]
+    public void Polar_Blur_ReadsAcrossThe360DegreeSeam()
+    {
+        // u = 0 の境界は黒と白の継ぎ目。またいで読めば両側が混ざる
+        _engine.SetImageSource(Split(64));
+        _engine.Paint(Red with { Tool = PaintTool.Blur, Size = 32 }, [new PaintDab(0, 32, 0.5)], Ring);
+
+        var image = _engine.ReadComposite()!;
+        Assert.InRange(At(image, 0, 32).R, 30, 225);
+        Assert.InRange(At(image, 63, 32).R, 30, 225);
+    }
+
+    [Fact]
+    public void Polar_Eraser_RemovesOnlyTheBrushedArea()
+    {
+        _engine.SetImageSource(Split(64));
+        _engine.Paint(Red with { Size = 64 }, [new PaintDab(16, 32, 0.5)], Ring);
+        _engine.Paint(Red with { Tool = PaintTool.Eraser, Size = 8 }, [new PaintDab(16, 32, 0.5)], Ring);
+
+        var image = _engine.ReadComposite()!;
+        Assert.Equal((0, 0, 0, 255), At(image, 16, 32));
+        Assert.Equal((255, 0, 0, 255), At(image, 16, 56));
+    }
+
+    private static double SeamStep(ImageData image, int y)
+    {
+        int a = At(image, 0, y).R, b = At(image, image.Width - 1, y).R;
+        return Math.Abs(a - b);
+    }
+
+    [Fact]
+    public void SeamBlend_ClosesTheSeam_AndCancelRestoresIt()
+    {
+        _engine.SetImageSource(Split(64));
+        _engine.Paint(Red with { Size = 8 }, [new PaintDab(32, 8)]);
+        var before = _engine.ReadComposite()!;
+        Assert.Equal(255, SeamStep(before, 32));
+
+        _engine.PreviewSeamBlend(new SeamBlendSettings(SeamMode.X, 0.25, 1));
+        var blended = _engine.ReadComposite()!;
+        Assert.True(SeamStep(blended, 32) < 16);
+        Assert.Equal(At(before, 24, 32), At(blended, 24, 32));
+
+        // 設定を変えると、残しておいた状態から作り直す
+        _engine.PreviewSeamBlend(new SeamBlendSettings(SeamMode.X, 0.25, 0));
+        Assert.Equal(255, SeamStep(_engine.ReadComposite()!, 32));
+
+        _engine.PreviewSeamBlend(new SeamBlendSettings(SeamMode.X, 0.25, 1));
+        _engine.CancelSeamBlend();
+        Assert.Equal(before.Rgba, _engine.ReadComposite()!.Rgba);
+    }
+
+    [Fact]
+    public void SeamBlend_Commit_Stays_AndCanBeSaved()
+    {
+        _engine.SetImageSource(Split(64));
+        _engine.PreviewSeamBlend(new SeamBlendSettings(SeamMode.X, 0.25, 1));
+        _engine.CommitSeamBlend();
+        _engine.CancelSeamBlend();
+
+        Assert.True(SeamStep(_engine.ReadComposite()!, 32) < 16);
+        Assert.NotNull(_engine.ReadPaintLayer());
+    }
+
+    [Fact]
+    public void SeamBlend_Cancel_WithNothingPainted_ReadsAsUnpainted()
+    {
+        _engine.SetImageSource(Split(64));
+        _engine.PreviewSeamBlend(new SeamBlendSettings());
+        _engine.CancelSeamBlend();
+        Assert.Null(_engine.ReadComposite());
     }
 
     [Fact]

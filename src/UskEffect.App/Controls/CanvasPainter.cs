@@ -19,7 +19,7 @@ internal sealed class CanvasPainter
     private readonly Action _strokeFinished;
 
     private BrushSettings? _strokeBrush;
-    private CanvasMapping? _mapping;
+    private ICanvasMapping? _mapping;
     private StrokeInterpolator? _interpolator;
     private readonly List<(double X, double Y)> _points = [];
 
@@ -52,8 +52,8 @@ internal sealed class CanvasPainter
             return;
 
         var brush = _brush();
-        var (textureX, textureY) = mapping.ScreenToTexture(x, y);
-        if (!mapping.IsInsideCanvas(textureX, textureY))
+        var (strokeX, strokeY) = mapping.ToStrokeSpace(x, y);
+        if (!mapping.CanStartAt(strokeX, strokeY))
             return;
 
         _strokeBrush = brush;
@@ -62,7 +62,7 @@ internal sealed class CanvasPainter
         Win32.BeginCapture(_host.Hwnd);
 
         _points.Clear();
-        _points.Add(_interpolator.Begin(textureX, textureY));
+        _points.Add(_interpolator.Begin(strokeX, strokeY));
         Submit();
     }
 
@@ -82,9 +82,9 @@ internal sealed class CanvasPainter
         }
 
         _engine.Cursor = new PaintCursor(x, y, _strokeBrush.Size);
-        var (textureX, textureY) = _mapping!.ScreenToTexture(x, y);
+        var (strokeX, strokeY) = _mapping!.ToStrokeSpace(x, y);
         _points.Clear();
-        _interpolator!.MoveTo(textureX, textureY, _points);
+        _interpolator!.MoveTo(strokeX, strokeY, _points);
         Submit();
     }
 
@@ -97,8 +97,9 @@ internal sealed class CanvasPainter
     private void Submit()
     {
         var mapping = _mapping!;
-        var dabs = _points.Where(p => mapping.IsInsideCanvas(p.X, p.Y)).Select(p => mapping.Wrap(p.X, p.Y)).ToArray();
-        _engine.Paint(_strokeBrush!, dabs);
+        var brush = _strokeBrush!;
+        var dabs = _points.Select(p => mapping.ToDab(p.X, p.Y, brush)).OfType<PaintDab>().ToArray();
+        _engine.Paint(brush, dabs, mapping.Polar);
     }
 
     private void EndStroke()

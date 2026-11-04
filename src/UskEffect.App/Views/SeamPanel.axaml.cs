@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using UskEffect.App.Locale;
 using UskEffect.Graphics;
 using UskEffect.Graphics.Analysis;
+using UskEffect.Graphics.Painting;
 
 namespace UskEffect.App.Views;
 
@@ -9,12 +10,49 @@ public partial class SeamPanel : UserControl
 {
     public event Action? Changed;
 
+    /// <summary>シーム修正の操作 (FR-13)。</summary>
+    public event Action? ManualFixRequested;
+    public event Action? BlendStarted;
+    public event Action? BlendChanged;
+    public event Action? BlendApplied;
+    public event Action? BlendCancelled;
+
     public SeamPanel()
     {
         InitializeComponent();
         HeatmapSegment.SelectionChanged += (_, _) => Changed?.Invoke();
         ThresholdField.ValueChanged += (_, _) => Changed?.Invoke();
+
+        ManualFixButton.Click += (_, _) => ManualFixRequested?.Invoke();
+        BlendButton.Click += (_, _) =>
+        {
+            ShowBlendControls(true);
+            BlendStarted?.Invoke();
+        };
+        BlendAxisSegment.SelectionChanged += (_, _) => RaiseBlendChanged();
+        BlendWidthField.ValueChanged += (_, _) => RaiseBlendChanged();
+        BlendStrengthField.ValueChanged += (_, _) => RaiseBlendChanged();
+        BlendApplyButton.Click += (_, _) => BlendApplied?.Invoke();
+        BlendCancelButton.Click += (_, _) => BlendCancelled?.Invoke();
+
         ShowAnalysis(null, pending: true);
+    }
+
+    public void ShowBlendControls(bool visible)
+    {
+        BlendControls.IsVisible = visible;
+        FixButtons.IsVisible = !visible;
+    }
+
+    public SeamBlendSettings ReadBlend() => new(
+        BlendAxisSegment.SelectedIndex switch { 0 => SeamMode.X, 1 => SeamMode.Y, _ => SeamMode.XY },
+        BlendWidthField.Value,
+        BlendStrengthField.Value);
+
+    private void RaiseBlendChanged()
+    {
+        if (BlendControls.IsVisible)
+            BlendChanged?.Invoke();
     }
 
     public HeatmapMode Heatmap

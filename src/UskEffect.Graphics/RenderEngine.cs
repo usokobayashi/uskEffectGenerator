@@ -85,7 +85,7 @@ public sealed class RenderEngine : IDisposable
     public EffectTimeline Timeline { get; } = new();
     public volatile bool VSync = true;
 
-    /// <summary>ブラシの大きさを示す輪。null で出さない。矩形表示でだけ描く。</summary>
+    /// <summary>ブラシの大きさを示す輪。null で出さない。エフェクトの表示では描かない。</summary>
     public volatile PaintCursor? Cursor;
 
     public NoiseSettings Noise
@@ -209,11 +209,21 @@ public sealed class RenderEngine : IDisposable
     }
 
     /// <summary>スタンプを置く。UI スレッドから呼んでよい。次のフレームで処理する。</summary>
-    public void Paint(BrushSettings brush, IReadOnlyList<PaintDab> dabs)
+    public void Paint(BrushSettings brush, IReadOnlyList<PaintDab> dabs, PolarStamp? polar = null)
     {
         if (dabs.Count > 0)
-            _paintCommands.Enqueue((source, isColor) => _paint.Stamp(brush, dabs, source, isColor));
+            _paintCommands.Enqueue((source, isColor) => _paint.Stamp(brush, dabs, polar, source, isColor));
     }
+
+    /// <summary>継ぎ目の自動ブレンドのプレビューを作り直す (FR-13)。UI スレッドから呼んでよい。</summary>
+    public void PreviewSeamBlend(SeamBlendSettings settings) =>
+        _paintCommands.Enqueue((source, isColor) => _paint.PreviewSeamBlend(settings, source, isColor));
+
+    /// <summary>プレビューを確定する。UI スレッドから呼んでよい。</summary>
+    public void CommitSeamBlend() => _paintCommands.Enqueue((_, _) => _paint.CommitSeamBlend());
+
+    /// <summary>プレビューを取り消す。UI スレッドから呼んでよい。</summary>
+    public void CancelSeamBlend() => _paintCommands.Enqueue((_, _) => _paint.CancelSeamBlend());
 
     /// <summary>描いた内容をすべて消す。UI スレッドから呼んでよい。</summary>
     public void ClearPaint()
@@ -255,8 +265,8 @@ public sealed class RenderEngine : IDisposable
         }
     }
 
-    /// <summary>今の表示で、画面の画素とテクスチャの画素を対応付ける。矩形表示でだけ使う。</summary>
-    public CanvasMapping? CreateCanvasMapping(int viewportWidth, int viewportHeight)
+    /// <summary>今の表示で、画面の画素とテクスチャの画素を対応付ける。エフェクトの表示では使わない。</summary>
+    public ICanvasMapping? CreateCanvasMapping(int viewportWidth, int viewportHeight)
     {
         var image = _image;
         int width = image?.Width ?? _noise.Width;
@@ -266,11 +276,23 @@ public sealed class RenderEngine : IDisposable
         return BuildMapping(viewportWidth, viewportHeight, width, height, Preview, View, _clock.Elapsed.TotalSeconds);
     }
 
-    private static CanvasMapping BuildMapping(int viewportWidth, int viewportHeight, int width, int height,
-        PreviewSettings preview, CanvasView view, double time) => new(
-            viewportWidth, viewportHeight, width, height, MainContentMargin, view,
-            preview.TilingX, preview.TilingY,
-            preview.OffsetX + preview.ScrollSpeedU * time, preview.OffsetY + preview.ScrollSpeedV * time);
+    private static ICanvasMapping BuildMapping(int viewportWidth, int viewportHeight, int width, int height,
+        PreviewSettings preview, CanvasView view, double time)
+    {
+        double offsetX = preview.OffsetX + preview.ScrollSpeedU * time;
+        double offsetY = preview.OffsetY + preview.ScrollSpeedV * time;
+        return preview.Mode switch
+        {
+            PreviewMode.Polar => new PolarCanvasMapping(viewportWidth, viewportHeight, width, height, MainContentMargin, view,
+                preview.Polar, preview.TilingX, preview.TilingY, offsetX, offsetY),
+
+            // シームの表示は半タイルずらしただけで、Tiling もスクロールも効かない
+            PreviewMode.SeamCheck => new CanvasMapping(viewportWidth, viewportHeight, width, height, MainContentMargin, view, 1, 1, 0.5, 0.5),
+
+            _ => new CanvasMapping(viewportWidth, viewportHeight, width, height, MainContentMargin, view,
+                preview.TilingX, preview.TilingY, offsetX, offsetY),
+        };
+    }
 
     private void LoadShaders()
     {
@@ -381,7 +403,7 @@ public sealed class RenderEngine : IDisposable
                 _preview.Render(_target.RenderTargetView, _target.Width, _target.Height, sourceView,
                     sourceWidth, sourceHeight, isColor, preview, time, _seamAnalysis, MainContentMargin, view);
 
-                if (preview.Mode == PreviewMode.Rect && Cursor is { } cursor && sourceWidth > 0 && sourceHeight > 0)
+                if (Cursor is { } cursor && sourceWidth > 0 && sourceHeight > 0)
                 {
                     var mapping = BuildMapping(_target.Width, _target.Height, sourceWidth, sourceHeight, preview, view, time);
                     _paint.DrawCursor(_target.RenderTargetView, _target.Width, _target.Height, cursor.X, cursor.Y,

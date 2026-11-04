@@ -14,11 +14,12 @@ public partial class MainWindow
     private const double BrushSizeStep = 1.25;
 
     private CanvasPainter? _painter;
+    private bool _seamBlendPreviewing;
 
     private bool IsPaintMode => Top.ModeSegment.SelectedIndex == 1;
 
-    // 極座標とシームの表示は矩形と画素の対応が違うので、矩形でだけ描ける
-    private bool CanPaint => IsPaintMode && Strip.Mode == PreviewMode.Rect;
+    // エフェクトの表示は動いていて画素と対応しない。自動ブレンドの確認中は描くと取り消せなくなる
+    private bool CanPaint => IsPaintMode && Strip.Mode != PreviewMode.Effect && !_seamBlendPreviewing;
 
     internal BrushSettings CurrentBrush => Strip.ReadBrush(Rail.Tool);
 
@@ -31,7 +32,55 @@ public partial class MainWindow
         Strip.ClearPaintRequested += async () => await ClearPaintAsync();
         Strip.Changed += ShowPaintAvailability;
         AddHandler(KeyDownEvent, OnPaintKeyDown, RoutingStrategies.Tunnel);
+
+        SeamTab.ManualFixRequested += StartManualSeamFix;
+        SeamTab.BlendStarted += StartSeamBlend;
+        SeamTab.BlendChanged += () => _engine?.PreviewSeamBlend(SeamTab.ReadBlend());
+        SeamTab.BlendApplied += () => EndSeamBlend(apply: true);
+        SeamTab.BlendCancelled += () => EndSeamBlend(apply: false);
+        Closing += (_, _) =>
+        {
+            if (_seamBlendPreviewing)
+                EndSeamBlend(apply: false);
+        };
+
         ApplyPaintMode();
+    }
+
+    // 継ぎ目を中央に寄せた表示のまま描くと、端をまたいで手で直せる
+    private void StartManualSeamFix()
+    {
+        Top.ModeSegment.SelectedIndex = 1;
+        Strip.Mode = PreviewMode.SeamCheck;
+        Status.ShowMessage(Loc.T("S.Seam.ManualHint"));
+    }
+
+    // 確認中はプレビューが保存されないよう、ファイル操作と元の画像の変更を止める
+    private void StartSeamBlend()
+    {
+        _seamBlendPreviewing = true;
+        Top.IsEnabled = false;
+        NoiseTab.IsEnabled = false;
+        Strip.Mode = PreviewMode.SeamCheck;
+        _engine?.Cursor = null;
+        _engine?.PreviewSeamBlend(SeamTab.ReadBlend());
+    }
+
+    private void EndSeamBlend(bool apply)
+    {
+        _seamBlendPreviewing = false;
+        Top.IsEnabled = true;
+        NoiseTab.IsEnabled = true;
+        SeamTab.ShowBlendControls(false);
+        if (apply)
+        {
+            _engine?.CommitSeamBlend();
+            MarkDirty();
+        }
+        else
+        {
+            _engine?.CancelSeamBlend();
+        }
     }
 
     private void ApplyPaintMode()
@@ -39,9 +88,9 @@ public partial class MainWindow
         bool paint = IsPaintMode;
         Rail.IsPaintMode = paint;
         Strip.ShowBrushSettings = paint;
-        if (paint)
+        if (paint && Strip.Mode == PreviewMode.Effect)
             Strip.Mode = PreviewMode.Rect;
-        else
+        else if (!paint)
             _painter?.HideCursor();
         if (!paint && _engine is not null)
             _engine.Cursor = null;
@@ -49,9 +98,9 @@ public partial class MainWindow
 
     private void ShowPaintAvailability()
     {
-        if (IsPaintMode && Strip.Mode != PreviewMode.Rect)
+        if (IsPaintMode && Strip.Mode == PreviewMode.Effect)
         {
-            Status.ShowMessage(Loc.T("S.Paint.RectOnly"));
+            Status.ShowMessage(Loc.T("S.Paint.NotInEffect"));
             if (_engine is not null)
                 _engine.Cursor = null;
         }

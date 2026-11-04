@@ -105,6 +105,7 @@ public partial class ViewStrip : UserControl
             Hardness = BrushHardnessField.Value,
             Opacity = BrushOpacityField.Value,
             Color = new System.Numerics.Vector3(color.R / 255f, color.G / 255f, color.B / 255f),
+            Wrap = BrushWrapSwitch.IsChecked == true,
         };
     }
 

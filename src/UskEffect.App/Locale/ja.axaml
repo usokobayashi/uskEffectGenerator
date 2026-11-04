@@ -84,7 +84,8 @@
   <x:String x:Key="S.Paint.ClearTitle">描いた内容を消去</x:String>
   <x:String x:Key="S.Paint.ClearBody">描いた内容をすべて消します。元のノイズや画像は残ります。この操作は元に戻せません。</x:String>
   <x:String x:Key="S.Paint.Clear">消去する</x:String>
-  <x:String x:Key="S.Paint.RectOnly">ペイントは矩形の表示で使えます。</x:String>
+  <x:String x:Key="S.Paint.NotInEffect">エフェクトの表示では描けません。矩形・極座標・シームの表示で描けます。</x:String>
+  <x:String x:Key="S.Brush.Wrap">端をつなげて描く</x:String>
 
   <!-- 表示 -->
   <x:String x:Key="S.View.Rect">矩形</x:String>
@@ -159,9 +160,17 @@
   <x:String x:Key="S.Seam.OverlayGradient">勾配の差分</x:String>
   <x:String x:Key="S.Seam.Threshold">しきい値</x:String>
   <x:String x:Key="S.Seam.Fix">シーム修正</x:String>
-  <x:String x:Key="S.Seam.FixOffset">オフセット表示</x:String>
-  <x:String x:Key="S.Seam.FixBlend">自動ブレンド</x:String>
-  <x:String x:Key="S.Seam.FixNote">今後の更新で使えるようになります。</x:String>
+  <x:String x:Key="S.Seam.FixOffset">オフセット表示で手直し</x:String>
+  <x:String x:Key="S.Seam.ManualHint">継ぎ目を中央に寄せました。ブラシやぼかしでなぞると手直しできます。</x:String>
+  <x:String x:Key="S.Seam.FixBlend">自動ブレンド...</x:String>
+  <x:String x:Key="S.Seam.BlendAxis">向き</x:String>
+  <x:String x:Key="S.Seam.BlendAxisX">左右</x:String>
+  <x:String x:Key="S.Seam.BlendAxisY">上下</x:String>
+  <x:String x:Key="S.Seam.BlendAxisBoth">両方</x:String>
+  <x:String x:Key="S.Seam.BlendWidth">幅</x:String>
+  <x:String x:Key="S.Seam.BlendStrength">強度</x:String>
+  <x:String x:Key="S.Seam.BlendApply">適用</x:String>
+  <x:String x:Key="S.Seam.BlendCancel">取り消し</x:String>
 
   <!-- エフェクト -->
   <x:String x:Key="S.Effect.Blend">合成</x:String>

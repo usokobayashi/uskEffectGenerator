@@ -29,6 +29,10 @@
                 <TextBlock Classes="rowLabel" Text="{DynamicResource S.Brush.Color}" />
                 <ui:ColorSwatch x:Name="BrushColorSwatch" Color="#FFFFFF" AutomationProperties.Name="{DynamicResource S.Brush.Color}" />
               </StackPanel>
+              <DockPanel>
+                <ui:SwitchButton x:Name="BrushWrapSwitch" DockPanel.Dock="Right" VerticalAlignment="Center" IsChecked="True" />
+                <TextBlock Text="{DynamicResource S.Brush.Wrap}" VerticalAlignment="Center" />
+              </DockPanel>
               <Button x:Name="ClearPaintButton" Classes="btn" Content="{DynamicResource S.Paint.ClearMenu}" HorizontalAlignment="Right" />
             </StackPanel>
           </Flyout>
